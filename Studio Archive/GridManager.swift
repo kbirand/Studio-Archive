@@ -15,6 +15,18 @@ class GridManager: ObservableObject, @unchecked Sendable {
     private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
     private var imageCache: [Int: NSImage] = [:]  // Separate image cache
     
+    // Maximum possible batch size based on CPU cores
+    private var maxBatchSize: Int {
+        let activeProcessorCount = ProcessInfo.processInfo.activeProcessorCount
+        return max(4, activeProcessorCount * 3)
+    }
+    
+    // Get batch size from UserDefaults or use default
+    private var batchSize: Int {
+        let size = defaults.integer(forKey: "ImageBatchSize")
+        return size == 0 ? 4 : min(max(4, size), maxBatchSize)
+    }
+    
     struct GridItem: Identifiable, Equatable, Sendable {
         let id: Int
         let originalPath: String
@@ -136,9 +148,14 @@ class GridManager: ObservableObject, @unchecked Sendable {
                 }
                 
                 // Process images in batches
-                let batches = stride(from: 0, to: files.count, by: 4).map {
-                    Array(files[$0..<min($0 + 4, files.count)])
+                let batches = stride(from: 0, to: files.count, by: self.batchSize).map {
+                    Array(files[$0..<min($0 + self.batchSize, files.count)])
                 }
+                
+                print("🔄 Processing images in \(batches.count) batches of up to \(self.batchSize) images each")
+                print("- Total images: \(files.count)")
+                print("- Active CPU cores: \(ProcessInfo.processInfo.activeProcessorCount)")
+                print("- Batch size: \(self.batchSize)")
                 
                 for batch in batches {
                     let group = DispatchGroup()

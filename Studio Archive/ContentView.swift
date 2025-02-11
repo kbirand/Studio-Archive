@@ -122,7 +122,10 @@ struct ContentView: View {
         } else {
             return works.filter { work in
                 (work.workPeriod ?? "").localizedCaseInsensitiveContains(searchText) ||
-                (work.stylist ?? "").localizedCaseInsensitiveContains(searchText)
+                (work.stylist ?? "").localizedCaseInsensitiveContains(searchText) ||
+                (work.hair ?? "").localizedCaseInsensitiveContains(searchText) ||
+                (work.makeup ?? "").localizedCaseInsensitiveContains(searchText) ||
+                (work.talent ?? "").localizedCaseInsensitiveContains(searchText)
             }
         }
     }

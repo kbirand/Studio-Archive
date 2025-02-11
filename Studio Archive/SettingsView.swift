@@ -8,12 +8,19 @@ struct SettingsView: View {
     @State private var isFilePickerPresented = false
     @State private var gridItemSize: Double
     @State private var rootFolderPath: String
+    @State private var batchSize: Double
     
     private let defaults = UserDefaults.standard
+    
+    private var maxBatchSize: Int {
+        let activeProcessorCount = ProcessInfo.processInfo.activeProcessorCount
+        return max(4, activeProcessorCount * 3)
+    }
     
     init() {
         _gridItemSize = State(initialValue: Double(UserDefaults.standard.float(forKey: "GridItemSize")))
         _rootFolderPath = State(initialValue: UserDefaults.standard.string(forKey: "RootFolderPath") ?? "Not Selected")
+        _batchSize = State(initialValue: Double(UserDefaults.standard.integer(forKey: "ImageBatchSize")))
     }
     
     var body: some View {
@@ -85,12 +92,39 @@ struct SettingsView: View {
                         HStack {
                             Text("100")
                             Slider(value: $gridItemSize, in: 100...1000) { _ in
+                                defaults.set(Float(gridItemSize), forKey: "GridItemSize")
                                 gridManager.updateGridItemSize(CGFloat(gridItemSize))
                             }
                             Text("1000")
                         }
                         Text("\(Int(gridItemSize))px")
                             .foregroundColor(.gray)
+                    }
+                }
+                
+                Section("Performance") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Concurrent Image Processing")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        
+                        HStack {
+                            Text("4")
+                            Slider(value: $batchSize, in: 4...Double(maxBatchSize)) { _ in
+                                defaults.set(Int(batchSize), forKey: "ImageBatchSize")
+                            }
+                            Text("\(maxBatchSize)")
+                        }
+                        
+                        Text("\(Int(batchSize)) images at once")
+                            .foregroundColor(.gray)
+                        
+                        Text("Higher values may improve performance on machines with more CPU cores, but could cause slowdown if set too high.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .padding(.top, 4)
                     }
                 }
             }
@@ -144,8 +178,9 @@ struct SettingsView: View {
                     )
                     
                     // Save the bookmark data
-                    UserDefaults.standard.set(bookmarkData, forKey: "RootFolderBookmark")
-                    UserDefaults.standard.set(url.path, forKey: "RootFolderPath")
+                    defaults.set(bookmarkData, forKey: "RootFolderBookmark")
+                    defaults.set(url.path, forKey: "RootFolderPath")
+                    rootFolderPath = url.path
                     
                     print("✅ Created and saved bookmark for: \(url.path)")
                 } catch {
