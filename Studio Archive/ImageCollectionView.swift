@@ -37,22 +37,33 @@ struct ImageCollectionView: NSViewRepresentable {
     }
     
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let collectionView = scrollView.documentView as? NSCollectionView else { return }
+        guard let collectionView = scrollView.documentView as? NSCollectionView else { 
+            print("⚠️ Collection view not found")
+            return 
+        }
         
-        // Update layout if grid size changed
-        collectionView.collectionViewLayout = createGridLayout()
+        // Only update layout if the grid size has changed
+        if context.coordinator.lastGridSize != gridManager.gridItemSize {
+            context.coordinator.lastGridSize = gridManager.gridItemSize
+            DispatchQueue.main.async {
+                collectionView.collectionViewLayout = self.createGridLayout()
+            }
+        }
         
         // Reload data when items change
         if context.coordinator.lastItemCount != gridManager.items.count {
-            // Save scroll position
-            let savedContentOffset = scrollView.contentView.bounds.origin
-            
             context.coordinator.lastItemCount = gridManager.items.count
-            collectionView.reloadData()
             
-            // Restore scroll position
-            scrollView.contentView.scroll(savedContentOffset)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
+            DispatchQueue.main.async {
+                // Save scroll position
+                let savedContentOffset = scrollView.contentView.bounds.origin
+                
+                collectionView.reloadData()
+                
+                // Restore scroll position
+                scrollView.contentView.scroll(savedContentOffset)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
         } else {
             // Only reload visible items if count hasn't changed
             collectionView.visibleItems().forEach { item in
@@ -77,6 +88,7 @@ struct ImageCollectionView: NSViewRepresentable {
     class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate, NSCollectionViewDelegateFlowLayout {
         var parent: ImageCollectionView
         var lastItemCount: Int = 0
+        var lastGridSize: CGFloat = 0
         
         init(_ parent: ImageCollectionView) {
             self.parent = parent
@@ -150,7 +162,7 @@ class ImageCollectionViewItem: NSCollectionViewItem {
         container.wantsLayer = true
         container.layer?.cornerRadius = 8
         container.layer?.masksToBounds = true
-        container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        //container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         
         // Create image layer
         let layer = CALayer()
