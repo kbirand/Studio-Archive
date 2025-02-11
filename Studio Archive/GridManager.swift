@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 
-class GridManager: ObservableObject {
+class GridManager: ObservableObject, @unchecked Sendable {
     static let shared = GridManager()
     
     @Published var selectedItemIndexes: Set<Int> = []
@@ -13,13 +13,13 @@ class GridManager: ObservableObject {
     private let fileManager = FileManager.default
     private let cacheFolderName = "ImageCache"
     private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
+    private var imageCache: [Int: NSImage] = [:]  // Separate image cache
     
-    struct GridItem: Identifiable, Equatable {
+    struct GridItem: Identifiable, Equatable, Sendable {
         let id: Int
         let originalPath: String
         let cachePath: String?
         var order: Int
-        var image: NSImage?
         
         static func == (lhs: GridItem, rhs: GridItem) -> Bool {
             return lhs.id == rhs.id
@@ -43,11 +43,10 @@ class GridManager: ObservableObject {
     
     private func setupCacheDirectory() {
         guard let cachePath = cacheDirPath else {
-            print("❌ Could not determine cache directory path")
+            print("❌ Cache directory path is nil")
             return
         }
         
-        // Create cache directory if it doesn't exist
         if !fileManager.fileExists(atPath: cachePath) {
             do {
                 try fileManager.createDirectory(atPath: cachePath, withIntermediateDirectories: true)
@@ -55,6 +54,8 @@ class GridManager: ObservableObject {
             } catch {
                 print("❌ Failed to create cache directory: \(error)")
             }
+        } else {
+            print("ℹ️ Cache directory already exists at: \(cachePath)")
         }
     }
     
@@ -99,8 +100,7 @@ class GridManager: ObservableObject {
                 id: file.0,
                 originalPath: originalPath,
                 cachePath: cachePath,
-                order: file.2,
-                image: nil
+                order: file.2
             )
         }.sorted { $0.order > $1.order }
         
@@ -135,10 +135,9 @@ class GridManager: ObservableObject {
                     return
                 }
                 
-                // Process images concurrently in batches
-                let batchSize = 4 // Process 4 images at a time
-                let batches = stride(from: 0, to: files.count, by: batchSize).map {
-                    Array(files[$0..<min($0 + batchSize, files.count)])
+                // Process images in batches
+                let batches = stride(from: 0, to: files.count, by: 4).map {
+                    Array(files[$0..<min($0 + 4, files.count)])
                 }
                 
                 for batch in batches {
@@ -214,10 +213,7 @@ class GridManager: ObservableObject {
                                             
                                             try jpegData.write(to: URL(fileURLWithPath: cachePath))
                                             print("✅ Successfully wrote cache file: \(targetSize)")
-                                            
-                                            lock.lock()
-                                            results.append(BatchResult(id: file.0, imageData: jpegData))
-                                            lock.unlock()
+                                            imageData = jpegData
                                         }
                                     }
                                 } catch {
@@ -243,11 +239,10 @@ class GridManager: ObservableObject {
                         
                         // Update loaded images
                         for result in results {
-                            if let itemIndex = self.items.firstIndex(where: { $0.id == result.id }) {
-                                if let imageData = result.imageData,
-                                   let image = NSImage(data: imageData) {
-                                    self.items[itemIndex].image = image
-                                }
+                            if self.items.contains(where: { $0.id == result.id }),
+                               let imageData = result.imageData,
+                               let image = NSImage(data: imageData) {
+                                self.setImage(for: result.id, image: image)
                             }
                         }
                         self.objectWillChange.send()
@@ -271,6 +266,20 @@ class GridManager: ObservableObject {
         }
     }
     
+    // Helper methods for image access
+    func getImage(for itemId: Int) -> NSImage? {
+        return imageCache[itemId]
+    }
+    
+    private func setImage(for itemId: Int, image: NSImage?) {
+        if let image = image {
+            imageCache[itemId] = image
+        } else {
+            imageCache.removeValue(forKey: itemId)
+        }
+        objectWillChange.send()
+    }
+    
     func updateOrder(fromIndex: Int, toIndex: Int) {
         guard fromIndex != toIndex,
               fromIndex >= 0, fromIndex < items.count,
@@ -285,13 +294,13 @@ class GridManager: ObservableObject {
         for (index, item) in items.enumerated() {
             let newOrder = items.count - index // Reverse the order to match DESC in SQL
             if item.order != newOrder {
-                updatedItems.append((index, GridItem(
+                let newItem = GridItem(
                     id: item.id,
                     originalPath: item.originalPath,
                     cachePath: item.cachePath,
-                    order: newOrder,
-                    image: item.image
-                )))
+                    order: newOrder
+                )
+                updatedItems.append((index, newItem))
             }
         }
         
@@ -299,9 +308,11 @@ class GridManager: ObservableObject {
         Task {
             for (index, newItem) in updatedItems {
                 do {
-                    if try await DatabaseManager.shared.updateFileOrder(fileId: newItem.id, newOrder: newItem.order) {
-                        DispatchQueue.main.async {
-                            self.items[index] = newItem
+                    let itemId = newItem.id
+                    let newOrder = newItem.order
+                    if try await DatabaseManager.shared.updateFileOrder(fileId: itemId, newOrder: newOrder) {
+                        DispatchQueue.main.async { [weak self] in
+                            self?.items[index] = newItem
                         }
                     }
                 } catch {
@@ -315,9 +326,10 @@ class GridManager: ObservableObject {
     }
     
     private var cacheDirPath: String? {
-        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+        guard let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            print("❌ Failed to get cache directory")
             return nil
         }
-        return appSupport.appendingPathComponent("Studio Archive").appendingPathComponent(cacheFolderName).path
+        return cacheDir.appendingPathComponent(cacheFolderName).path
     }
 }

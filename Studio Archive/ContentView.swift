@@ -207,7 +207,7 @@ struct ContentView: View {
                         HStack {
                             Text("Talent:")
                                 .foregroundColor(.gray)
-                                .frame(width: 60, alignment: .trailing)
+                                .frame(width: 80, alignment: .trailing)
                             TextField("Enter talent", text: $editedTalent)
                                 .textFieldStyle(.plain)
                                 .onChange(of: editedTalent) { _, _ in
@@ -218,7 +218,7 @@ struct ContentView: View {
                         HStack {
                             Text("Stylist:")
                                 .foregroundColor(.gray)
-                                .frame(width: 60, alignment: .trailing)
+                                .frame(width: 80, alignment: .trailing)
                             TextField("Enter stylist", text: $editedStylist)
                                 .textFieldStyle(.plain)
                                 .onChange(of: editedStylist) { _, _ in
@@ -229,7 +229,7 @@ struct ContentView: View {
                         HStack {
                             Text("Hair:")
                                 .foregroundColor(.gray)
-                                .frame(width: 60, alignment: .trailing)
+                                .frame(width: 80, alignment: .trailing)
                             TextField("Enter hair", text: $editedHair)
                                 .textFieldStyle(.plain)
                                 .onChange(of: editedHair) { _, _ in
@@ -240,7 +240,7 @@ struct ContentView: View {
                         HStack {
                             Text("Makeup:")
                                 .foregroundColor(.gray)
-                                .frame(width: 60, alignment: .trailing)
+                                .frame(width: 80, alignment: .trailing)
                             TextField("Enter makeup", text: $editedMakeup)
                                 .textFieldStyle(.plain)
                                 .onChange(of: editedMakeup) { _, _ in

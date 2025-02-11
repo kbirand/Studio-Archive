@@ -72,7 +72,7 @@ struct ImageCollectionView: NSViewRepresentable {
                 if let indexPath = collectionView.indexPath(for: item),
                    let imageItem = item as? ImageCollectionViewItem {
                     let gridItem = gridManager.items[indexPath.item]
-                    imageItem.setImage(gridItem.image)
+                    imageItem.setImage(gridManager.getImage(for: gridItem.id))
                 }
             }
         }
@@ -107,8 +107,8 @@ struct ImageCollectionView: NSViewRepresentable {
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("ImageCell"),
                                              for: indexPath) as! ImageCollectionViewItem
             let gridItem = parent.gridManager.items[indexPath.item]
-            print("- Has image: \(gridItem.image != nil)")
-            item.setImage(gridItem.image)
+            print("- Loading image for id: \(gridItem.id)")
+            item.setImage(parent.gridManager.getImage(for: gridItem.id))
             return item
         }
         
