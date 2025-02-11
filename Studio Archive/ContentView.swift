@@ -37,13 +37,25 @@ struct ContentView: View {
     @State private var originalHair: String = ""
     @State private var originalMakeup: String = ""
     
+    private func loadSelectedWork(id: Int) {
+        if let selectedWork = works.first(where: { $0.id == id }) {
+            detailsManager.fetchFiles(forWorkId: id) {
+                // Load images only after files are fetched
+                GridManager.shared.loadImages(
+                    forWorkPath: selectedWork.path ?? "",
+                    files: self.detailsManager.files.map { ($0.id, $0.file, $0.ordered) }
+                )
+            }
+            initializeEditingStates(with: selectedWork)
+        }
+    }
+    
     private func loadWorksAndSelectFirst() {
         works = databaseManager.fetchWorks()
         if let firstWork = works.first {
             selectedWorkId = firstWork.id
             currentEditingId = firstWork.id
-            detailsManager.fetchFiles(forWorkId: firstWork.id)
-            initializeEditingStates(with: firstWork)
+            loadSelectedWork(id: firstWork.id)
         }
     }
     
@@ -285,49 +297,32 @@ struct ContentView: View {
             if hasChanges() {
                 pendingWorkId = newId
                 showUnsavedChangesAlert = true
-                // Revert selection until user makes a choice
-                if let currentId = currentEditingId {
-                    selectedWorkId = currentId
-                }
-            } else if let newId = newId,
-                      let selectedWork = works.first(where: { $0.id == newId }) {
-                print("\n🔄 ContentView: Selected work changed")
-                print("- Work ID: \(newId)")
-                print("- Work Path: \(selectedWork.path ?? "nil")")
-                
-                // Fetch files and update GridManager only after files are loaded
-                detailsManager.fetchFiles(forWorkId: newId) {
-                    print("\n📂 Files in database:")
-                    detailsManager.files.forEach { file in
-                        print("- \(file.file)")
-                    }
-                    
-                    print("\n📂 Loading images from:")
-                    print("- Root: \(UserDefaults.standard.string(forKey: "RootFolderPath") ?? "nil")")
-                    print("- Work: \(selectedWork.path ?? "nil")")
-                    
-                    GridManager.shared.loadImages(
-                        forWorkPath: selectedWork.path ?? "",
-                        files: detailsManager.files.map { ($0.id, $0.file, $0.ordered) }
-                    )
+            } else {
+                if let newId = newId {
+                    loadSelectedWork(id: newId)
                 }
             }
         }
         .alert("Unsaved Changes", isPresented: $showUnsavedChangesAlert) {
-            Button("Save", role: .destructive) {
+            Button("Save Changes", role: .none) {
                 saveChanges()
             }
-            Button("Continue Without Saving", role: .cancel) {
+            Button("Discard Changes", role: .destructive) {
                 if let pendingId = pendingWorkId {
                     selectedWorkId = pendingId
                     if let selectedWork = works.first(where: { $0.id == pendingId }) {
                         initializeEditingStates(with: selectedWork)
+                        detailsManager.fetchFiles(forWorkId: pendingId)
                     }
                 }
                 pendingWorkId = nil
             }
+            Button("Cancel", role: .cancel) {
+                selectedWorkId = currentEditingId
+                pendingWorkId = nil
+            }
         } message: {
-            Text("You have unsaved changes. Would you like to save them before continuing?")
+            Text("Do you want to save your changes before switching to another work?")
         }
         .onAppear {
             if databaseManager.isDatabaseSelected {

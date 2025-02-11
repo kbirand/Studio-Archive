@@ -11,48 +11,8 @@ class GridManager: ObservableObject {
     
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
-    private let cacheSize = CGSize(width: 512, height: 512)
     private let cacheFolderName = "ImageCache"
-    
-    static func createPlaceholderImage(progress: (current: Int, total: Int)? = nil) -> NSImage {
-        let size = NSSize(width: 300, height: 300)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        
-        // Draw gray background
-        NSColor.lightGray.withAlphaComponent(0.1).setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
-        
-        // Draw loading indicator
-        let text: String
-        if let progress = progress {
-            text = "Loading \(progress.current)/\(progress.total)..."
-        } else {
-            text = "Loading..."
-        }
-        
-        let font = NSFont.systemFont(ofSize: 14)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.gray
-        ]
-        let textSize = text.size(withAttributes: attributes)
-        let textPoint = NSPoint(
-            x: (size.width - textSize.width) / 2,
-            y: (size.height - textSize.height) / 2
-        )
-        text.draw(at: textPoint, withAttributes: attributes)
-        
-        image.unlockFocus()
-        return image
-    }
-    
-    private var cacheDirPath: String? {
-        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        return appSupport.appendingPathComponent("Studio Archive").appendingPathComponent(cacheFolderName).path
-    }
+    private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
     
     struct GridItem: Identifiable, Equatable {
         let id: Int
@@ -73,7 +33,7 @@ class GridManager: ObservableObject {
         let imageData: Data?
     }
     
-    private init() {
+    init() {
         // Initialize with stored grid size or default
         if defaults.float(forKey: "GridItemSize") == 0 {
             defaults.set(Float(200), forKey: "GridItemSize")
@@ -87,12 +47,13 @@ class GridManager: ObservableObject {
             return
         }
         
+        // Create cache directory if it doesn't exist
         if !fileManager.fileExists(atPath: cachePath) {
             do {
                 try fileManager.createDirectory(atPath: cachePath, withIntermediateDirectories: true)
-                print("✅ Created local cache directory at: \(cachePath)")
+                print("✅ Created cache directory at: \(cachePath)")
             } catch {
-                print("❌ Failed to create local cache directory: \(error)")
+                print("❌ Failed to create cache directory: \(error)")
             }
         }
     }
@@ -139,7 +100,7 @@ class GridManager: ObservableObject {
                 originalPath: originalPath,
                 cachePath: cachePath,
                 order: file.2,
-                image: GridManager.createPlaceholderImage(progress: (0, files.count))
+                image: nil
             )
         }.sorted { $0.order > $1.order }
         
@@ -215,59 +176,52 @@ class GridManager: ObservableObject {
                             if imageData == nil && self.fileManager.fileExists(atPath: originalPath) {
                                 print("- Generating cache")
                                 do {
-                                    let data = try Data(contentsOf: URL(fileURLWithPath: originalPath))
-                                    print("✅ Successfully read file data, size: \(data.count) bytes")
-                                    
-                                    if let originalImage = NSImage(data: data) {
-                                        print("✅ Successfully created NSImage from data")
+                                    if let image = NSImage(contentsOfFile: originalPath) {
+                                        // Calculate target size maintaining aspect ratio
+                                        let originalSize = image.size
+                                        var targetSize = originalSize
                                         
-                                        // Resize image to cache size while maintaining aspect ratio
-                                        let originalSize = originalImage.size
-                                        let originalRatio = originalSize.width / originalSize.height
-                                        let cacheRatio = self.cacheSize.width / self.cacheSize.height
-                                        
-                                        var drawRect = NSRect(origin: .zero, size: self.cacheSize)
-                                        if originalRatio > cacheRatio {
-                                            // Image is wider, scale to height
-                                            let height = self.cacheSize.width / originalRatio
-                                            drawRect.origin.y = (self.cacheSize.height - height) / 2
-                                            drawRect.size.height = height
-                                        } else {
-                                            // Image is taller, scale to width
-                                            let width = self.cacheSize.height * originalRatio
-                                            drawRect.origin.x = (self.cacheSize.width - width) / 2
-                                            drawRect.size.width = width
+                                        // Only resize if image is larger than maxThumbnailSize
+                                        if originalSize.width > self.maxThumbnailSize || originalSize.height > self.maxThumbnailSize {
+                                            let widthRatio = self.maxThumbnailSize / originalSize.width
+                                            let heightRatio = self.maxThumbnailSize / originalSize.height
+                                            let scale = min(widthRatio, heightRatio)
+                                            
+                                            targetSize = NSSize(
+                                                width: ceil(originalSize.width * scale),
+                                                height: ceil(originalSize.height * scale)
+                                            )
                                         }
                                         
-                                        let resizedImage = NSImage(size: self.cacheSize)
-                                        resizedImage.lockFocus()
-                                        NSColor.clear.set()
-                                        NSRect(origin: .zero, size: self.cacheSize).fill()
+                                        print("Original size: \(originalSize), Target size: \(targetSize)")
                                         
-                                        originalImage.draw(in: drawRect,
-                                                         from: NSRect(origin: .zero, size: originalSize),
-                                                         operation: .sourceOver,
-                                                         fraction: 1.0)
+                                        // Create thumbnail representation
+                                        let thumbnailImage = NSImage(size: targetSize)
+                                        thumbnailImage.lockFocus()
                                         
-                                        resizedImage.unlockFocus()
+                                        NSGraphicsContext.current?.imageInterpolation = .high
+                                        image.draw(in: NSRect(origin: .zero, size: targetSize),
+                                                 from: NSRect(origin: .zero, size: originalSize),
+                                                 operation: .copy,
+                                                 fraction: 1.0)
                                         
-                                        // Save to cache
-                                        if let tiffData = resizedImage.tiffRepresentation,
+                                        thumbnailImage.unlockFocus()
+                                        
+                                        // Convert to JPEG and save to cache
+                                        if let tiffData = thumbnailImage.tiffRepresentation,
                                            let bitmap = NSBitmapImageRep(data: tiffData),
-                                           let jpegData = bitmap.representation(using: .jpeg, properties: [:]) {
-                                            do {
-                                                try jpegData.write(to: URL(fileURLWithPath: cachePath))
-                                                print("✅ Successfully generated cache at: \(cachePath)")
-                                                imageData = jpegData
-                                            } catch {
-                                                print("❌ Failed to write cache file: \(error)")
-                                            }
+                                           let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
+                                            
+                                            try jpegData.write(to: URL(fileURLWithPath: cachePath))
+                                            print("✅ Successfully wrote cache file: \(targetSize)")
+                                            
+                                            lock.lock()
+                                            results.append(BatchResult(id: file.0, imageData: jpegData))
+                                            lock.unlock()
                                         }
-                                    } else {
-                                        print("❌ Failed to create NSImage from data")
                                     }
                                 } catch {
-                                    print("❌ Failed to read file data: \(error)")
+                                    print("❌ Failed to process image: \(error)")
                                 }
                             }
                             
@@ -293,9 +247,6 @@ class GridManager: ObservableObject {
                                 if let imageData = result.imageData,
                                    let image = NSImage(data: imageData) {
                                     self.items[itemIndex].image = image
-                                } else {
-                                    // Update placeholder with current progress
-                                    self.items[itemIndex].image = GridManager.createPlaceholderImage(progress: (processedCount, files.count))
                                 }
                             }
                         }
@@ -354,5 +305,12 @@ class GridManager: ObservableObject {
                 }
             }
         }
+    }
+    
+    private var cacheDirPath: String? {
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return appSupport.appendingPathComponent("Studio Archive").appendingPathComponent(cacheFolderName).path
     }
 }

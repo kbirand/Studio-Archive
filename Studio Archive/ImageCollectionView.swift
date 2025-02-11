@@ -19,6 +19,7 @@ struct ImageCollectionView: NSViewRepresentable {
         collectionView.dataSource = context.coordinator
         collectionView.isSelectable = true
         collectionView.allowsMultipleSelection = true
+        collectionView.backgroundColors = [.clear]  // Make background transparent
         
         // Register cell class
         collectionView.register(ImageCollectionViewItem.self, 
@@ -32,6 +33,7 @@ struct ImageCollectionView: NSViewRepresentable {
         scrollView.documentView = collectionView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = false  // Make scroll view background transparent
         
         return scrollView
     }
@@ -155,6 +157,7 @@ struct ImageCollectionView: NSViewRepresentable {
 class ImageCollectionViewItem: NSCollectionViewItem {
     private var containerView: NSView?
     private var imageLayer: CALayer?
+    private var progressIndicator: NSProgressIndicator?
     
     override func loadView() {
         // Create container view with rounded corners
@@ -162,42 +165,60 @@ class ImageCollectionViewItem: NSCollectionViewItem {
         container.wantsLayer = true
         container.layer?.cornerRadius = 8
         container.layer?.masksToBounds = true
-        //container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        // Remove background color to make it transparent
+        
+        // Create progress indicator
+        let progress = NSProgressIndicator(frame: .zero)
+        progress.style = .spinning
+        progress.controlSize = .regular
+        progress.isIndeterminate = true
+        progress.startAnimation(nil)
+        container.addSubview(progress)
         
         // Create image layer
         let layer = CALayer()
         layer.masksToBounds = true
-        layer.contentsGravity = .resize
-        print("Resize")
+        layer.contentsGravity = .resizeAspectFill  // Use aspect fill
         layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 1.0
         container.layer?.addSublayer(layer)
         
         containerView = container
         imageLayer = layer
+        progressIndicator = progress
         self.view = container
     }
     
     override func viewDidLayout() {
         super.viewDidLayout()
         imageLayer?.frame = view.bounds
+        
+        // Center the progress indicator
+        if let progress = progressIndicator {
+            let progressSize: CGFloat = 32
+            progress.frame = NSRect(
+                x: (view.bounds.width - progressSize) / 2,
+                y: (view.bounds.height - progressSize) / 2,
+                width: progressSize,
+                height: progressSize
+            )
+        }
     }
     
     override var isSelected: Bool {
         didSet {
-            updateFocusRing()
+            containerView?.layer?.borderWidth = isSelected ? 2 : 0
+            containerView?.layer?.borderColor = isSelected ? NSColor.selectedControlColor.cgColor : nil
         }
-    }
-    
-    private func updateFocusRing() {
-        containerView?.layer?.borderWidth = isSelected ? 3 : 0
-        containerView?.layer?.borderColor = isSelected ? NSColor.controlAccentColor.cgColor : nil
     }
     
     func setImage(_ image: NSImage?) {
         if let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             imageLayer?.contents = cgImage
+            imageLayer?.contentsGravity = .resizeAspectFill
+            progressIndicator?.isHidden = true
         } else {
             imageLayer?.contents = nil
+            progressIndicator?.isHidden = false
         }
     }
 }
