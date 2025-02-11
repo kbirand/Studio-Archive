@@ -276,35 +276,42 @@ class GridManager: ObservableObject {
               fromIndex >= 0, fromIndex < items.count,
               toIndex >= 0, toIndex < items.count else { return }
         
-        // Update local order
+        // Update local order immediately
         let item = items.remove(at: fromIndex)
         items.insert(item, at: toIndex)
         
-        // Update order values
+        // Calculate new order values but don't update items yet
+        var updatedItems: [(index: Int, item: GridItem)] = []
         for (index, item) in items.enumerated() {
             let newOrder = items.count - index // Reverse the order to match DESC in SQL
             if item.order != newOrder {
-                // Update database
-                Task {
-                    do {
-                        if try await DatabaseManager.shared.updateFileOrder(fileId: item.id, newOrder: newOrder) {
-                            // Update local items array with new item
-                            DispatchQueue.main.async {
-                                self.items[index] = GridItem(
-                                    id: item.id,
-                                    originalPath: item.originalPath,
-                                    cachePath: item.cachePath,
-                                    order: newOrder,
-                                    image: item.image
-                                )
-                            }
+                updatedItems.append((index, GridItem(
+                    id: item.id,
+                    originalPath: item.originalPath,
+                    cachePath: item.cachePath,
+                    order: newOrder,
+                    image: item.image
+                )))
+            }
+        }
+        
+        // Batch update database
+        Task {
+            for (index, newItem) in updatedItems {
+                do {
+                    if try await DatabaseManager.shared.updateFileOrder(fileId: newItem.id, newOrder: newItem.order) {
+                        DispatchQueue.main.async {
+                            self.items[index] = newItem
                         }
-                    } catch {
-                        print("❌ Failed to update file order in database: \(error)")
                     }
+                } catch {
+                    print("❌ Failed to update order for item \(newItem.id): \(error)")
                 }
             }
         }
+        
+        // Notify UI of the initial reorder
+        objectWillChange.send()
     }
     
     private var cacheDirPath: String? {

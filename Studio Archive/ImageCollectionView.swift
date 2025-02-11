@@ -147,7 +147,16 @@ struct ImageCollectionView: NSViewRepresentable {
             
             let toIndex = indexPath.item
             parent.gridManager.updateOrder(fromIndex: fromIndex, toIndex: toIndex)
-            collectionView.reloadData()
+            
+            // Animate the reordering
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                context.allowsImplicitAnimation = true
+                collectionView.animator().performBatchUpdates({
+                    collectionView.moveItem(at: IndexPath(item: fromIndex, section: 0),
+                                         to: IndexPath(item: toIndex, section: 0))
+                }, completionHandler: nil)
+            }
             
             return true
         }
