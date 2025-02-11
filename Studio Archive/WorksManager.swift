@@ -35,7 +35,6 @@ class WorksManager: ObservableObject {
         
         if sqlite3_step(statement) == SQLITE_DONE {
             print("Successfully added new work")
-            LogManager.shared.info("Successfully added new work")
             return true
         } else {
             errorMessage = "Failed to add new work"

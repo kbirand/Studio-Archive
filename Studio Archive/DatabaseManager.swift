@@ -1,14 +1,19 @@
 import Foundation
 import SQLite3
+import SwiftUI
 
 class DatabaseManager: ObservableObject {
     static let shared = DatabaseManager()
-    private var db: OpaquePointer?
-    @Published var isDatabaseSelected: Bool
-    @Published var currentDatabasePath: String?
-    @Published var errorMessage: String = ""
-    @Published var showError: Bool = false
     
+    @Published var currentDatabasePath: String?
+    @Published var showError = false
+    @Published var errorMessage = ""
+    
+    var isDatabaseSelected: Bool {
+        currentDatabasePath != nil && db != nil
+    }
+    
+    fileprivate(set) var db: OpaquePointer?
     private let defaults = UserDefaults.standard
     private let databasePathKey = "LastDatabasePath"
     
@@ -23,7 +28,6 @@ class DatabaseManager: ObservableObject {
     }
     
     private init() {
-        self.isDatabaseSelected = false
         setupInitialDatabaseIfNeeded()
     }
     
@@ -36,7 +40,6 @@ class DatabaseManager: ObservableObject {
         if let savedPath = defaults.string(forKey: databasePathKey),
            FileManager.default.fileExists(atPath: savedPath) {
             print("Found existing database at: \(savedPath)")
-            LogManager.shared.info("Found existing database at: \(savedPath)")
             openDatabase(at: savedPath)
             return
         }
@@ -54,19 +57,16 @@ class DatabaseManager: ObservableObject {
                 // Copy the initial database
                 try FileManager.default.copyItem(at: bundleURL, to: destinationURL)
                 print("Successfully copied initial database to: \(destinationURL.path)")
-                LogManager.shared.info("Successfully copied initial database to: \(destinationURL.path)")
                 
                 // Open the copied database
                 openDatabase(at: destinationURL.path)
             } catch {
                 print("Error setting up initial database: \(error)")
-                LogManager.shared.error("Error setting up initial database: \(error)")
                 errorMessage = "Failed to setup initial database: \(error.localizedDescription)"
                 showError = true
             }
         } else {
             print("No initial database found in bundle")
-            LogManager.shared.warning("No initial database found in bundle")
         }
     }
     
@@ -76,7 +76,6 @@ class DatabaseManager: ObservableObject {
         // Start accessing the security-scoped resource
         guard sourceURL.startAccessingSecurityScopedResource() else {
             print("Failed to access security-scoped resource")
-            LogManager.shared.error("Failed to access security-scoped resource")
             errorMessage = "Failed to access the database file. Please try selecting it again."
             showError = true
             return
@@ -99,13 +98,11 @@ class DatabaseManager: ObservableObject {
             // Copy the database file to documents directory
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
             print("Successfully copied database to: \(destinationURL.path)")
-            LogManager.shared.info("Successfully copied database to: \(destinationURL.path)")
             
             // Open the copied database
             openDatabase(at: destinationURL.path)
         } catch {
             print("Error copying database: \(error)")
-            LogManager.shared.error("Error copying database: \(error)")
             errorMessage = "Failed to copy database: \(error.localizedDescription)"
             showError = true
         }
@@ -116,7 +113,6 @@ class DatabaseManager: ObservableObject {
             sqlite3_close(db)
             self.db = nil
         }
-        isDatabaseSelected = false
         currentDatabasePath = nil
     }
     
@@ -126,12 +122,10 @@ class DatabaseManager: ObservableObject {
     
     func openDatabase(at path: String) {
         print("Attempting to open database at: \(path)")
-        LogManager.shared.info("Attempting to open database at: \(path)")
         
         // Verify the file exists
         guard FileManager.default.fileExists(atPath: path) else {
             print("Database file does not exist at path: \(path)")
-            LogManager.shared.error("Database file does not exist at path: \(path)")
             return
         }
         
@@ -149,27 +143,22 @@ class DatabaseManager: ObservableObject {
                 
                 if result == SQLITE_ROW {
                     self.db = database
-                    self.isDatabaseSelected = true
                     self.currentDatabasePath = path
                     defaults.set(path, forKey: databasePathKey)
                     print("Successfully opened database")
-                    LogManager.shared.info("Successfully opened database")
                     
                     // Count the works
                     if let count = try? getWorkCount() {
                         print("Database contains \(count) works")
-                        LogManager.shared.info("Database contains \(count) works")
                     }
                 } else {
                     print("Database does not contain required 'works' table")
-                    LogManager.shared.error("Database does not contain required 'works' table")
                     sqlite3_close(database)
                     errorMessage = "The selected file is not a valid works database"
                     showError = true
                 }
             } else {
                 print("Could not verify database structure")
-                LogManager.shared.error("Could not verify database structure")
                 sqlite3_close(database)
                 errorMessage = "Could not verify database structure"
                 showError = true
@@ -178,12 +167,10 @@ class DatabaseManager: ObservableObject {
             if let database = db {
                 let errorMsg = String(cString: sqlite3_errmsg(database))
                 print("Error opening database: \(errorMsg)")
-                LogManager.shared.error("Error opening database: \(errorMsg)")
                 sqlite3_close(database)
                 errorMessage = "Error opening database: \(errorMsg)"
             } else {
                 print("Error opening database")
-                LogManager.shared.error("Error opening database")
                 errorMessage = "Error opening database"
             }
             showError = true
@@ -217,7 +204,6 @@ class DatabaseManager: ObservableObject {
         var works: [Work] = []
         guard let db = db else {
             print("Database connection is not initialized")
-            LogManager.shared.error("Database connection is not initialized")
             return works
         }
         
@@ -226,7 +212,6 @@ class DatabaseManager: ObservableObject {
         
         guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
             print("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))")
-            LogManager.shared.error("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))")
             return works
         }
         
@@ -255,11 +240,85 @@ class DatabaseManager: ObservableObject {
         }
         
         print("Fetched \(works.count) works from database")
-        LogManager.shared.info("Fetched \(works.count) works from database")
         return works
     }
     
     func getDatabase() -> OpaquePointer? {
         return db
+    }
+    
+    func updateWork(id: Int, workPeriod: String?, talent: String?, stylist: String?, hair: String?, makeup: String?) -> Bool {
+        guard let db = db else {
+            print("Database connection is not initialized")
+            return false
+        }
+        
+        let queryString = """
+            UPDATE works 
+            SET work_period = ?, talent = ?, stylist = ?, hair = ?, makeup = ?
+            WHERE id = ?
+        """
+        
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
+            print("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))")
+            return false
+        }
+        
+        // Bind parameters
+        sqlite3_bind_text(statement, 1, (workPeriod as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_text(statement, 2, (talent as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_text(statement, 3, (stylist as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_text(statement, 4, (hair as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_text(statement, 5, (makeup as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_int(statement, 6, Int32(id))
+        
+        let result = sqlite3_step(statement) == SQLITE_DONE
+        sqlite3_finalize(statement)
+        
+        if result {
+            print("Successfully updated work with id: \(id)")
+        } else {
+            print("Error updating work: \(String(cString: sqlite3_errmsg(db)))")
+        }
+        
+        return result
+    }
+    
+    enum DatabaseError: Error {
+        case notInitialized
+        case prepareFailed(String)
+        case executeFailed(String)
+    }
+    
+    func updateFileOrder(fileId: Int, newOrder: Int) async throws -> Bool {
+        guard let db = db else {
+            throw DatabaseError.notInitialized
+        }
+        
+        let queryString = "UPDATE files SET ordered = ? WHERE id = ?"
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        
+        defer {
+            sqlite3_finalize(statement)
+        }
+        
+        sqlite3_bind_int(statement, 1, Int32(newOrder))
+        sqlite3_bind_int(statement, 2, Int32(fileId))
+        
+        let result = sqlite3_step(statement) == SQLITE_DONE
+        
+        if result {
+            print("Successfully updated file order for id: \(fileId)")
+        } else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        
+        return result
     }
 }
