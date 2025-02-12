@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+import SQLite3
 import UniformTypeIdentifiers
+import Foundation
 import AppKit
 
 struct ContentView: View {
@@ -19,6 +21,7 @@ struct ContentView: View {
     @State private var selectedWorkId: Int?
     @State private var searchText = ""
     @State private var showAddPhotosDialog = false
+    @State private var showDeleteAlert = false
     
     // Editing states
     @State private var editedWorkPeriod: String = ""
@@ -210,7 +213,7 @@ struct ContentView: View {
                         ImageCollectionViewWithDialog(gridManager: GridManager.shared) { selectedIndexes in
                             GridManager.shared.selectedItemIndexes = selectedIndexes
                         }
-                        .frame(height: geometry.size.height - 220) // Increased by 40 to move form up
+                        .frame(height: geometry.size.height - 235) // Increased space for form
                         
                         HStack(alignment: .bottom, spacing: 20) {
                             VStack(alignment: .leading, spacing: 16) {
@@ -273,7 +276,7 @@ struct ContentView: View {
                                     }
                                 
                                     Button("Remove Work") {
-                                        // Action will be implemented later
+                                        showDeleteAlert = true
                                     }
                                     .foregroundColor(.red)
                                 
@@ -287,6 +290,7 @@ struct ContentView: View {
                                 }
                             }
                         }
+                        .padding(.bottom, 12)
                     }
                 }
                 .padding(40)
@@ -336,6 +340,28 @@ struct ContentView: View {
             }
         } message: {
             Text("Do you want to save your changes before switching to another work?")
+        }
+        .alert("Delete Work", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                if let id = selectedWorkId {
+                    LogManager.shared.log("ContentView: Starting deletion of work with ID: \(id)", type: .delete)
+                    if databaseManager.deleteWork(id: id) {
+                        LogManager.shared.log("ContentView: Successfully removed work from UI", type: .delete)
+                        // Remove from works array
+                        works.removeAll { $0.id == id }
+                        // Clear selection
+                        selectedWorkId = works.first?.id
+                        // Clear grid
+                        GridManager.shared.clearCache()
+                        GridManager.shared.items.removeAll()
+                    } else {
+                        LogManager.shared.log("ContentView: Failed to delete work with ID: \(id)", type: .error)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to delete this work? This action cannot be undone.")
         }
         .onAppear {
             if databaseManager.isDatabaseSelected {

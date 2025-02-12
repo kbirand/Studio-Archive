@@ -49,6 +49,8 @@ class AddManager: ObservableObject {
             }
         }
         
+        logManager.log("Starting import of \(totalFiles) files", type: .add)
+        
         // Show progress window on main thread
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -82,6 +84,8 @@ class AddManager: ObservableObject {
                 }
             }
         }
+        
+        logManager.log("Finished importing files", type: .add)
         
         // Fetch updated files from database and refresh grid
         if let db = databaseManager.getDatabase() {
@@ -159,6 +163,8 @@ class AddManager: ObservableObject {
                 try fileManager.removeItem(at: destinationUrl)
             }
             try fileManager.copyItem(at: url, to: destinationUrl)
+            
+            logManager.log("Adding file: \(url.lastPathComponent)", type: .add)
             
             // Add entry to database - only store filename, not path
             let filename = url.lastPathComponent

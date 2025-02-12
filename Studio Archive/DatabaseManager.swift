@@ -332,12 +332,79 @@ class DatabaseManager: ObservableObject {
         let result = sqlite3_step(statement) == SQLITE_DONE
         
         if result {
-            logManager.log("Successfully deleted file with id: \(id)", type: .info)
+            logManager.log("Successfully deleted file with id: \(id)", type: .delete)
         } else {
             logManager.log("Error deleting file: \(String(cString: sqlite3_errmsg(db)))", type: .error)
         }
         
         return result
+    }
+    
+    func deleteWork(id: Int) -> Bool {
+        guard let db = db else {
+            logManager.log("Database connection is not initialized", type: .error)
+            return false
+        }
+        
+        logManager.log("Starting deletion of work with ID: \(id)", type: .delete)
+        
+        // Begin transaction
+        if sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil) != SQLITE_OK {
+            logManager.log("Failed to begin transaction: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            return false
+        }
+        
+        // Delete from files table first (foreign key)
+        let deleteFilesQuery = "DELETE FROM files WHERE workid = ?"
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, deleteFilesQuery, -1, &statement, nil) == SQLITE_OK else {
+            logManager.log("Error preparing delete files statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            return false
+        }
+        
+        sqlite3_bind_int(statement, 1, Int32(id))
+        
+        if sqlite3_step(statement) != SQLITE_DONE {
+            logManager.log("Error deleting files: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            sqlite3_finalize(statement)
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            return false
+        }
+        
+        logManager.log("Successfully deleted files for work ID: \(id)", type: .delete)
+        sqlite3_finalize(statement)
+        
+        // Delete from works table
+        let deleteWorkQuery = "DELETE FROM works WHERE id = ?"
+        
+        guard sqlite3_prepare_v2(db, deleteWorkQuery, -1, &statement, nil) == SQLITE_OK else {
+            logManager.log("Error preparing delete work statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            return false
+        }
+        
+        sqlite3_bind_int(statement, 1, Int32(id))
+        
+        if sqlite3_step(statement) != SQLITE_DONE {
+            logManager.log("Error deleting work: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            sqlite3_finalize(statement)
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            return false
+        }
+        
+        sqlite3_finalize(statement)
+        
+        // Commit transaction
+        if sqlite3_exec(db, "COMMIT", nil, nil, nil) != SQLITE_OK {
+            logManager.log("Failed to commit transaction: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            return false
+        }
+        
+        logManager.log("Successfully deleted work with ID: \(id)", type: .delete)
+        return true
     }
     
     enum DatabaseError: Error {

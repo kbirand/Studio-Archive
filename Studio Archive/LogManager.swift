@@ -139,4 +139,6 @@ enum LogType: String {
     case warning = "WARNING"
     case error = "ERROR"
     case debug = "DEBUG"
+    case add = "ADD"
+    case delete = "DELETE"
 }
