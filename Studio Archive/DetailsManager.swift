@@ -79,4 +79,10 @@ class DetailsManager: ObservableObject {
             completion()
         }
     }
+    
+    func refreshFiles() {
+        if let currentWorkId = files.first?.workId {
+            fetchFiles(forWorkId: currentWorkId)
+        }
+    }
 }

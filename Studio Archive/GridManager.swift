@@ -251,9 +251,13 @@ class GridManager: ObservableObject, @unchecked Sendable {
                                            let bitmap = NSBitmapImageRep(data: tiffData),
                                            let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
                                             
-                                            try jpegData.write(to: URL(fileURLWithPath: cachePath))
-                                            LogManager.shared.log("Successfully wrote cache file: \(targetSize)", type: .debug)
+                                            // Save to cache asynchronously while we use the data directly
+                                            Task {
+                                                try? jpegData.write(to: URL(fileURLWithPath: cachePath))
+                                            }
+                                            
                                             imageData = jpegData
+                                            LogManager.shared.log("Successfully created thumbnail", type: .debug)
                                         }
                                     }
                                 } catch {
@@ -391,6 +395,11 @@ class GridManager: ObservableObject, @unchecked Sendable {
             imageAccessTimes.removeAll()
             LogManager.shared.log("Cleared image cache", type: .debug)
         }
+    }
+    
+    func removeItem(id: Int) {
+        items.removeAll { $0.id == id }
+        objectWillChange.send()
     }
     
     func updateOrder(fromIndex: Int, toIndex: Int) {

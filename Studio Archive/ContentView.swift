@@ -201,7 +201,7 @@ struct ContentView: View {
                             isEdited = hasChanges()
                         }
                     
-                    ImageCollectionView(gridManager: GridManager.shared) { selectedIndexes in
+                    ImageCollectionViewWithDialog(gridManager: GridManager.shared) { selectedIndexes in
                         GridManager.shared.selectedItemIndexes = selectedIndexes
                     }
                     .frame(maxHeight: .infinity)

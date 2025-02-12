@@ -287,12 +287,6 @@ class DatabaseManager: ObservableObject {
         return result
     }
     
-    enum DatabaseError: Error {
-        case notInitialized
-        case prepareFailed(String)
-        case executeFailed(String)
-    }
-    
     func updateFileOrder(fileId: Int, newOrder: Int) async throws -> Bool {
         guard let db = db else {
             throw DatabaseError.notInitialized
@@ -312,14 +306,43 @@ class DatabaseManager: ObservableObject {
         sqlite3_bind_int(statement, 1, Int32(newOrder))
         sqlite3_bind_int(statement, 2, Int32(fileId))
         
+        return sqlite3_step(statement) == SQLITE_DONE
+    }
+    
+    func deleteFile(id: Int) -> Bool {
+        guard let db = db else {
+            logManager.log("Database connection is not initialized", type: .error)
+            return false
+        }
+        
+        let queryString = "DELETE FROM files WHERE id = ?"
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
+            logManager.log("Error preparing delete statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            return false
+        }
+        
+        defer {
+            sqlite3_finalize(statement)
+        }
+        
+        sqlite3_bind_int(statement, 1, Int32(id))
+        
         let result = sqlite3_step(statement) == SQLITE_DONE
         
         if result {
-            logManager.log("Successfully updated file order for id: \(fileId)", type: .info)
+            logManager.log("Successfully deleted file with id: \(id)", type: .info)
         } else {
-            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+            logManager.log("Error deleting file: \(String(cString: sqlite3_errmsg(db)))", type: .error)
         }
         
         return result
+    }
+    
+    enum DatabaseError: Error {
+        case notInitialized
+        case prepareFailed(String)
+        case executeFailed(String)
     }
 }
