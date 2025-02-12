@@ -5,28 +5,81 @@ import SQLite3
 class AddManager: ObservableObject {
     private let databaseManager = DatabaseManager.shared
     private let logManager = LogManager.shared
+    private var progressWindowController: ImportProgressWindowController?
+    
+    init() {
+        // Initialize progress window controller
+        progressWindowController = ImportProgressWindowController()
+    }
     
     func showOpenPanel(workId: Int, workPath: String) {
         let openPanel = NSOpenPanel()
         openPanel.canChooseFiles = true
         openPanel.canChooseDirectories = true
         openPanel.allowsMultipleSelection = true
-        openPanel.allowedFileTypes = ["png", "jpg", "jpeg"]
+        openPanel.allowedContentTypes = [.jpeg, .png]
 
-        openPanel.begin { (result) in
+        openPanel.begin { [weak self] (result) in
             if result == .OK {
                 let urls = openPanel.urls
-                self.processSelectedItems(urls: urls, workId: workId, workPath: workPath)
+                // Start import on background thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    self?.processSelectedItems(urls: urls, workId: workId, workPath: workPath)
+                }
             }
         }
     }
 
     private func processSelectedItems(urls: [URL], workId: Int, workPath: String) {
+        // Count total files including those in directories
+        var totalFiles = 0
         for url in urls {
             if url.hasDirectoryPath {
-                self.importImagesFromDirectory(url: url, workId: workId, workPath: workPath)
+                do {
+                    let contents = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+                    totalFiles += contents.filter { url in
+                        let fileExtension = url.pathExtension.lowercased()
+                        return ["jpg", "jpeg", "png"].contains(fileExtension)
+                    }.count
+                } catch {
+                    logManager.log("Error counting files in directory: \(error)", type: .error)
+                }
+            } else {
+                totalFiles += 1
+            }
+        }
+        
+        // Show progress window on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.progressWindowController == nil {
+                self.progressWindowController = ImportProgressWindowController()
+            }
+            self.progressWindowController?.showWindow(nil)
+            if let window = self.progressWindowController?.window {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+                window.center()
+            }
+            ImportProgress.shared.show(totalFiles: totalFiles)
+        }
+        
+        var currentFileNumber = 0
+        
+        for url in urls {
+            if url.hasDirectoryPath {
+                self.importImagesFromDirectory(url: url, workId: workId, workPath: workPath) { fileName in
+                    currentFileNumber += 1
+                    DispatchQueue.main.async {
+                        ImportProgress.shared.updateProgress(fileName: fileName, fileNumber: currentFileNumber)
+                    }
+                }
             } else {
                 self.importImage(url: url, workId: workId, workPath: workPath)
+                currentFileNumber += 1
+                DispatchQueue.main.async {
+                    ImportProgress.shared.updateProgress(fileName: url.lastPathComponent, fileNumber: currentFileNumber)
+                }
             }
         }
         
@@ -48,9 +101,12 @@ class AddManager: ObservableObject {
                 
                 sqlite3_finalize(statement)
                 
-                // Update grid on main thread
-                DispatchQueue.main.async {
+                // Update grid and hide progress window on main thread
+                DispatchQueue.main.async { [weak self] in
                     GridManager.shared.loadImages(forWorkPath: workPath, files: files)
+                    ImportProgress.shared.hide()
+                    self?.progressWindowController?.close()
+                    self?.progressWindowController = nil
                 }
             }
         }
@@ -58,7 +114,7 @@ class AddManager: ObservableObject {
         NotificationCenter.default.post(name: NSNotification.Name("RefreshGridView"), object: nil)
     }
 
-    private func importImagesFromDirectory(url: URL, workId: Int, workPath: String) {
+    private func importImagesFromDirectory(url: URL, workId: Int, workPath: String, progress: @escaping (String) -> Void) {
         do {
             let fileManager = FileManager.default
             let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
@@ -69,6 +125,7 @@ class AddManager: ObservableObject {
             
             for imageUrl in imageFiles {
                 importImage(url: imageUrl, workId: workId, workPath: workPath)
+                progress(imageUrl.lastPathComponent)
             }
         } catch {
             logManager.log("Error importing images from directory: \(error)", type: .error)
