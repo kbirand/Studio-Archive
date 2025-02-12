@@ -29,6 +29,32 @@ class AddManager: ObservableObject {
                 self.importImage(url: url, workId: workId, workPath: workPath)
             }
         }
+        
+        // Fetch updated files from database and refresh grid
+        if let db = databaseManager.getDatabase() {
+            var statement: OpaquePointer?
+            let query = "SELECT id, file, ordered FROM files WHERE workid = ? ORDER BY ordered"
+            
+            if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+                sqlite3_bind_int(statement, 1, Int32(workId))
+                
+                var files: [(id: Int, path: String, order: Int)] = []
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    let id = Int(sqlite3_column_int(statement, 0))
+                    let file = String(cString: sqlite3_column_text(statement, 1))
+                    let order = Int(sqlite3_column_int(statement, 2))
+                    files.append((id: id, path: file, order: order))
+                }
+                
+                sqlite3_finalize(statement)
+                
+                // Update grid on main thread
+                DispatchQueue.main.async {
+                    GridManager.shared.loadImages(forWorkPath: workPath, files: files)
+                }
+            }
+        }
+        
         NotificationCenter.default.post(name: NSNotification.Name("RefreshGridView"), object: nil)
     }
 
