@@ -9,8 +9,10 @@ struct SettingsView: View {
     @State private var gridItemSize: Double
     @State private var rootFolderPath: String
     @State private var batchSize: Double
+    @State private var showLogsFinder = false
     
     private let defaults = UserDefaults.standard
+    private let logManager = LogManager.shared
     
     private var maxBatchSize: Int {
         let activeProcessorCount = ProcessInfo.processInfo.activeProcessorCount
@@ -26,17 +28,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Database") {
-                    VStack(alignment: .leading, spacing: 8) {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Database File")
+                            Label("Database Location", systemImage: "externaldrive")
                                 .font(.headline)
                             
                             Spacer()
                             
-                            Button("Change") {
-                                isFilePickerPresented = true
+                            Button(action: { isFilePickerPresented = true }) {
+                                Label("Change", systemImage: "folder.badge.plus")
                             }
+                            .buttonStyle(.borderless)
                         }
                         
                         if let path = databaseManager.currentDatabasePath {
@@ -45,89 +48,220 @@ struct SettingsView: View {
                             } label: {
                                 HStack {
                                     Text(path)
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
                                     
                                     Image(systemName: "arrow.up.forward.square")
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(.accentColor)
                                         .font(.caption)
                                 }
                             }
                             .buttonStyle(.plain)
                         } else {
-                            Text("No database selected")
-                                .font(.caption)
+                            Label("No database selected", systemImage: "exclamationmark.triangle")
+                                .font(.subheadline)
                                 .foregroundColor(.red)
                         }
                     }
+                } header: {
+                    Text("Database")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
-                Section("Root Folder") {
-                    VStack(alignment: .leading, spacing: 8) {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Root Folder")
+                            Label("Root Folder", systemImage: "folder")
                                 .font(.headline)
                             
                             Spacer()
                             
-                            Button("Select Folder") {
-                                selectRootFolder()
+                            Button(action: selectRootFolder) {
+                                Label("Select", systemImage: "folder.badge.plus")
                             }
+                            .buttonStyle(.borderless)
                         }
                         
                         Text(rootFolderPath)
-                            .font(.caption)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
+                } header: {
+                    Text("Location")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
-                Section("Grid Item Size") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Grid Item Size")
-                                .font(.headline)
-                            
-                            Spacer()
-                        }
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Grid Item Size", systemImage: "square.grid.3x3")
+                            .font(.headline)
                         
-                        HStack {
-                            Text("100")
+                        VStack(alignment: .leading, spacing: 4) {
                             Slider(value: $gridItemSize, in: 100...1000) { _ in
                                 defaults.set(Float(gridItemSize), forKey: "GridItemSize")
                                 gridManager.updateGridItemSize(CGFloat(gridItemSize))
                             }
-                            Text("1000")
+                            
+                            HStack {
+                                Text("100px")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text("\(Int(gridItemSize))px")
+                                    .font(.subheadline)
+                                    .foregroundColor(.accentColor)
+                                
+                                Spacer()
+                                
+                                Text("1000px")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        Text("\(Int(gridItemSize))px")
-                            .foregroundColor(.gray)
                     }
+                } header: {
+                    Text("Appearance")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
-                Section("Performance") {
-                    VStack(alignment: .leading, spacing: 8) {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Concurrent Image Processing")
+                            Label("Image Cache", systemImage: "photo.stack")
                                 .font(.headline)
+                            
                             Spacer()
+                            
+                            Button {
+                                gridManager.deleteCache()
+                            } label: {
+                                Label("Clear Cache", systemImage: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.borderless)
                         }
                         
-                        HStack {
-                            Text("4")
+                        Text("Deletes all cached thumbnail images to free up space")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("Cache Management")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Concurrent Processing", systemImage: "cpu")
+                            .font(.headline)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            
                             Slider(value: $batchSize, in: 4...Double(maxBatchSize)) { _ in
                                 defaults.set(Int(batchSize), forKey: "ImageBatchSize")
                             }
-                            Text("\(maxBatchSize)")
+                            
+                            HStack {
+                                Text("4")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text("\(Int(batchSize)) images at once")
+                                    .font(.subheadline)
+                                    .foregroundColor(.accentColor)
+                                
+                                Spacer()
+                                
+                                Text("\(maxBatchSize)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         
-                        Text("\(Int(batchSize)) images at once")
-                            .foregroundColor(.gray)
-                        
                         Text("Higher values may improve performance on machines with more CPU cores, but could cause slowdown if set too high.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                             .padding(.top, 4)
                     }
+                } header: {
+                    Text("Performance")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("Application Logs", systemImage: "doc.text")
+                                .font(.headline)
+                            
+                            Spacer()
+                            
+                            Button {
+                                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: logManager.logsDirectoryPath)
+                            } label: {
+                                Label("Open in Finder", systemImage: "arrow.up.forward.square")
+                                    .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        
+                        if !logManager.getRecentLogs().isEmpty {
+                            Text("Recent Logs:")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            ForEach(logManager.getRecentLogs(), id: \.path) { log in
+                                Button {
+                                    NSWorkspace.shared.selectFile(log.path, inFileViewerRootedAtPath: "")
+                                } label: {
+                                    HStack {
+                                        Text(log.name)
+                                            .font(.caption)
+                                            .foregroundColor(.accentColor)
+                                        
+                                        Spacer()
+                                        
+                                        Text(log.date, style: .date)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            
+                            Button(role: .destructive) {
+                                logManager.clearOldLogs(olderThan: 30)
+                            } label: {
+                                Label("Clear Old Logs", systemImage: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.borderless)
+                            .padding(.top, 2)
+                        }
+                    }
+                } header: {
+                    Text("Logs")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
+            .formStyle(.grouped)
+            .frame(minWidth: 500, maxWidth: .infinity, minHeight: 600, maxHeight: 700)
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

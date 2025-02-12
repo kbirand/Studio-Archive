@@ -23,11 +23,11 @@ class DetailsManager: ObservableObject {
     
     func fetchFiles(forWorkId workId: Int, completion: @escaping () -> Void = {}) {
         guard let db = db else {
-            print("Database connection is not initialized")
+            LogManager.shared.log("Database connection is not initialized", type: .error)
             return
         }
         
-        print("\n🔍 DetailsManager: Fetching files for work ID: \(workId)")
+        LogManager.shared.log("DetailsManager: Fetching files for work ID: \(workId)", type: .info)
         
         let queryString = """
             SELECT id, workid, file, ordered
@@ -39,7 +39,7 @@ class DetailsManager: ObservableObject {
         var statement: OpaquePointer?
         
         guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
-            print("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))")
+            LogManager.shared.log("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
             return
         }
         
@@ -66,16 +66,16 @@ class DetailsManager: ObservableObject {
             )
             
             tempFiles.append(fileRecord)
-            print("📄 Found file: \(file) (ID: \(id), Work ID: \(workId), Order: \(ordered))")
+            LogManager.shared.log("Found file: \(file) (ID: \(id), Work ID: \(workId), Order: \(ordered))", type: .debug)
         }
         
         sqlite3_finalize(statement)
         
-        print("📦 Total files found: \(tempFiles.count)")
+        LogManager.shared.log("Total files found: \(tempFiles.count)", type: .info)
         
         DispatchQueue.main.async {
             self.files = tempFiles
-            print("✅ Updated files array on main thread")
+            LogManager.shared.log("Updated files array on main thread", type: .debug)
             completion()
         }
     }

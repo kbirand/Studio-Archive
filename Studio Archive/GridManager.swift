@@ -54,20 +54,20 @@ class GridManager: ObservableObject, @unchecked Sendable {
     }
     
     private func setupCacheDirectory() {
-        guard let cachePath = cacheDirPath else {
-            print("❌ Cache directory path is nil")
+        guard let cachePath = getCacheDirectoryPath() else {
+            LogManager.shared.log("Cache directory path is nil", type: .error)
             return
         }
         
         if !fileManager.fileExists(atPath: cachePath) {
             do {
                 try fileManager.createDirectory(atPath: cachePath, withIntermediateDirectories: true)
-                print("✅ Created cache directory at: \(cachePath)")
+                LogManager.shared.log("Created cache directory at: \(cachePath)", type: .info)
             } catch {
-                print("❌ Failed to create cache directory: \(error)")
+                LogManager.shared.log("Failed to create cache directory: \(error)", type: .error)
             }
         } else {
-            print("ℹ️ Cache directory already exists at: \(cachePath)")
+            LogManager.shared.log("Cache directory already exists at: \(cachePath)", type: .debug)
         }
     }
     
@@ -78,25 +78,25 @@ class GridManager: ObservableObject, @unchecked Sendable {
     
     func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int)]) {
         guard let rootPath = defaults.string(forKey: "RootFolderPath") else {
-            print("⚠️ GridManager: Root path not found in UserDefaults")
+            LogManager.shared.log("GridManager: Root path not found in UserDefaults", type: .warning)
             return
         }
         
         guard let bookmarkData = defaults.data(forKey: "RootFolderBookmark") else {
-            print("⚠️ GridManager: Root folder bookmark not found")
+            LogManager.shared.log("GridManager: Root folder bookmark not found", type: .warning)
             return
         }
         
-        guard let cachePath = cacheDirPath else {
-            print("❌ Could not determine cache directory path")
+        guard let cachePath = getCacheDirectoryPath() else {
+            LogManager.shared.log("Could not determine cache directory path", type: .error)
             return
         }
         
-        print("📂 GridManager: Loading images")
-        print("- Root path: \(rootPath)")
-        print("- Work path: \(workPath)")
-        print("- Cache path: \(cachePath)")
-        print("- Files count: \(files.count)")
+        LogManager.shared.log("GridManager: Loading images", type: .info)
+        LogManager.shared.log("Root path: \(rootPath)", type: .debug)
+        LogManager.shared.log("Work path: \(workPath)", type: .debug)
+        LogManager.shared.log("Cache path: \(cachePath)", type: .debug)
+        LogManager.shared.log("Files count: \(files.count)", type: .debug)
         
         // Reset progress
         progress = (0, files.count)
@@ -134,16 +134,16 @@ class GridManager: ObservableObject, @unchecked Sendable {
                 )
                 
                 if isStale {
-                    print("⚠️ Bookmark is stale, needs to be recreated")
+                    LogManager.shared.log("Bookmark is stale, needs to be recreated", type: .warning)
                     return
                 }
                 
                 // Start accessing the security-scoped resource
                 if rootURL!.startAccessingSecurityScopedResource() {
                     isAccessingResource = true
-                    print("✅ Successfully started accessing security-scoped resource")
+                    LogManager.shared.log("Successfully started accessing security-scoped resource", type: .info)
                 } else {
-                    print("❌ Failed to access security-scoped resource")
+                    LogManager.shared.log("Failed to access security-scoped resource", type: .error)
                     return
                 }
                 
@@ -152,10 +152,10 @@ class GridManager: ObservableObject, @unchecked Sendable {
                     Array(files[$0..<min($0 + self.batchSize, files.count)])
                 }
                 
-                print("🔄 Processing images in \(batches.count) batches of up to \(self.batchSize) images each")
-                print("- Total images: \(files.count)")
-                print("- Active CPU cores: \(ProcessInfo.processInfo.activeProcessorCount)")
-                print("- Batch size: \(self.batchSize)")
+                LogManager.shared.log("Processing images in \(batches.count) batches of up to \(self.batchSize) images each", type: .info)
+                LogManager.shared.log("Total images: \(files.count)", type: .debug)
+                LogManager.shared.log("Active CPU cores: \(ProcessInfo.processInfo.activeProcessorCount)", type: .debug)
+                LogManager.shared.log("Batch size: \(self.batchSize)", type: .debug)
                 
                 for batch in batches {
                     let group = DispatchGroup()
@@ -171,26 +171,26 @@ class GridManager: ObservableObject, @unchecked Sendable {
                             let cacheFileName = "\(workPath.replacingOccurrences(of: "/", with: "_"))_\(fileName)"
                             let cachePath = (cachePath as NSString).appendingPathComponent(cacheFileName)
                             
-                            print("\n📸 Processing image for ID: \(file.0)")
-                            print("- Original path: \(originalPath)")
-                            print("- Cache path: \(cachePath)")
+                            LogManager.shared.log("Processing image for ID: \(file.0)", type: .debug)
+                            LogManager.shared.log("Original path: \(originalPath)", type: .debug)
+                            LogManager.shared.log("Cache path: \(cachePath)", type: .debug)
                             
                             var imageData: Data? = nil
                             
                             // Try to load from cache first
                             if self.fileManager.fileExists(atPath: cachePath) {
-                                print("- Loading from cache")
+                                LogManager.shared.log("Loading from cache", type: .debug)
                                 imageData = try? Data(contentsOf: URL(fileURLWithPath: cachePath))
                                 if imageData != nil {
-                                    print("✅ Successfully loaded from cache")
+                                    LogManager.shared.log("Successfully loaded from cache", type: .debug)
                                 } else {
-                                    print("❌ Failed to load from cache")
+                                    LogManager.shared.log("Failed to load from cache", type: .warning)
                                 }
                             }
                             
                             // If not in cache or failed to load from cache, generate it
                             if imageData == nil && self.fileManager.fileExists(atPath: originalPath) {
-                                print("- Generating cache")
+                                LogManager.shared.log("Generating cache", type: .debug)
                                 do {
                                     if let image = NSImage(contentsOfFile: originalPath) {
                                         // Calculate target size maintaining aspect ratio
@@ -209,7 +209,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
                                             )
                                         }
                                         
-                                        print("Original size: \(originalSize), Target size: \(targetSize)")
+                                        LogManager.shared.log("Original size: \(originalSize), Target size: \(targetSize)", type: .debug)
                                         
                                         // Create thumbnail representation
                                         let thumbnailImage = NSImage(size: targetSize)
@@ -229,12 +229,12 @@ class GridManager: ObservableObject, @unchecked Sendable {
                                            let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
                                             
                                             try jpegData.write(to: URL(fileURLWithPath: cachePath))
-                                            print("✅ Successfully wrote cache file: \(targetSize)")
+                                            LogManager.shared.log("Successfully wrote cache file: \(targetSize)", type: .debug)
                                             imageData = jpegData
                                         }
                                     }
                                 } catch {
-                                    print("❌ Failed to process image: \(error)")
+                                    LogManager.shared.log("Failed to process image: \(error)", type: .error)
                                 }
                             }
                             
@@ -267,18 +267,18 @@ class GridManager: ObservableObject, @unchecked Sendable {
                 }
                 
             } catch {
-                print("❌ Failed to resolve bookmark: \(error)")
+                LogManager.shared.log("Failed to resolve bookmark: \(error)", type: .error)
             }
             
             // Stop accessing the security-scoped resource
             if isAccessingResource {
                 rootURL?.stopAccessingSecurityScopedResource()
-                print("✅ Stopped accessing security-scoped resource")
+                LogManager.shared.log("Stopped accessing security-scoped resource", type: .debug)
             }
             
             DispatchQueue.main.async {
                 self.progress = nil
-                print("\n✅ GridManager: Finished loading all images")
+                LogManager.shared.log("GridManager: Finished loading all images", type: .info)
             }
         }
     }
@@ -333,7 +333,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
                         }
                     }
                 } catch {
-                    print("❌ Failed to update order for item \(newItem.id): \(error)")
+                    LogManager.shared.log("Failed to update order for item \(newItem.id): \(error)", type: .error)
                 }
             }
         }
@@ -343,10 +343,36 @@ class GridManager: ObservableObject, @unchecked Sendable {
     }
     
     private var cacheDirPath: String? {
-        guard let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-            print("❌ Failed to get cache directory")
-            return nil
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(cacheFolderName)
+            .path
+    }
+    
+    private func getCacheDirectoryPath() -> String? {
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(cacheFolderName)
+            .path
+    }
+    
+    func deleteCache() {
+        guard let cachePath = getCacheDirectoryPath() else {
+            LogManager.shared.log("Cache directory path is nil", type: .error)
+            return
         }
-        return cacheDir.appendingPathComponent(cacheFolderName).path
+        
+        do {
+            if fileManager.fileExists(atPath: cachePath) {
+                try fileManager.removeItem(atPath: cachePath)
+                LogManager.shared.log("Successfully deleted cache directory", type: .info)
+                // Clear the in-memory cache
+                imageCache.removeAll()
+                // Recreate the cache directory
+                setupCacheDirectory()
+            } else {
+                LogManager.shared.log("Cache directory doesn't exist", type: .info)
+            }
+        } catch {
+            LogManager.shared.log("Error deleting cache: \(error)", type: .error)
+        }
     }
 }

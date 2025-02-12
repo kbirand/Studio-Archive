@@ -40,7 +40,7 @@ struct ImageCollectionView: NSViewRepresentable {
     
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let collectionView = scrollView.documentView as? NSCollectionView else { 
-            print("⚠️ Collection view not found")
+            LogManager.shared.log("Collection view not found", type: .warning)
             return 
         }
         
@@ -98,16 +98,16 @@ struct ImageCollectionView: NSViewRepresentable {
         
         func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
             let count = parent.gridManager.items.count
-            print("📊 CollectionView: Number of items = \(count)")
+            LogManager.shared.log("CollectionView: Number of items = \(count)", type: .debug)
             return count
         }
         
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            print("🔄 CollectionView: Creating item at index \(indexPath.item)")
+            LogManager.shared.log("CollectionView: Creating item at index \(indexPath.item)", type: .debug)
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("ImageCell"),
                                              for: indexPath) as! ImageCollectionViewItem
             let gridItem = parent.gridManager.items[indexPath.item]
-            print("- Loading image for id: \(gridItem.id)")
+            LogManager.shared.log("Loading image for id: \(gridItem.id)", type: .debug)
             item.setImage(parent.gridManager.getImage(for: gridItem.id))
             return item
         }

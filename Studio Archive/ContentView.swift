@@ -255,6 +255,7 @@ struct ContentView: View {
                     .padding(.bottom, 20)
                 }
                 .padding(40)
+                .padding([.top],10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
