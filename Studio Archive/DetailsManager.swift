@@ -66,7 +66,7 @@ class DetailsManager: ObservableObject {
             )
             
             tempFiles.append(fileRecord)
-            LogManager.shared.log("Found file: \(file) (ID: \(id), Work ID: \(workId), Order: \(ordered))", type: .debug)
+            //LogManager.shared.log("Found file: \(file) (ID: \(id), Work ID: \(workId), Order: \(ordered))", type: .debug)
         }
         
         sqlite3_finalize(statement)
@@ -75,7 +75,7 @@ class DetailsManager: ObservableObject {
         
         DispatchQueue.main.async {
             self.files = tempFiles
-            LogManager.shared.log("Updated files array on main thread", type: .debug)
+            //LogManager.shared.log("Updated files array on main thread", type: .debug)
             completion()
         }
     }

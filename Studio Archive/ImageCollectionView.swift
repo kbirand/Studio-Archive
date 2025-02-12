@@ -226,12 +226,12 @@ struct ImageCollectionView: NSViewRepresentable {
         
         func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
             let count = parent.gridManager.items.count
-            LogManager.shared.log("CollectionView: Number of items = \(count)", type: .debug)
+            //LogManager.shared.log("CollectionView: Number of items = \(count)", type: .debug)
             return count
         }
         
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            LogManager.shared.log("CollectionView: Creating item at index \(indexPath.item)", type: .debug)
+            //LogManager.shared.log("CollectionView: Creating item at index \(indexPath.item)", type: .debug)
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("ImageCell"),
                                              for: indexPath) as! ImageCollectionViewItem
             let gridItem = parent.gridManager.items[indexPath.item]

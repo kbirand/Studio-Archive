@@ -195,105 +195,99 @@ struct ContentView: View {
             }
         } detail: {
             if works.first(where: { $0.id == selectedWorkId }) != nil {
-                VStack(alignment: .leading, spacing: 30) {
-                    TextField("Work Period", text: $editedWorkPeriod)
-                        .font(.system(size: 38, weight: .light))
-                        .textFieldStyle(.plain)
-                        .padding(.bottom, 20)
-                        .onChange(of: editedWorkPeriod) { _, _ in
-                            isEdited = hasChanges()
-                        }
-                    
-                    ImageCollectionViewWithDialog(gridManager: GridManager.shared) { selectedIndexes in
-                        GridManager.shared.selectedItemIndexes = selectedIndexes
-                    }
-                    .frame(maxHeight: .infinity)
-                    
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text("Talent:")
-                                .foregroundColor(.gray)
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Enter talent", text: $editedTalent)
-                                .textFieldStyle(.plain)
-                                .onChange(of: editedTalent) { _, _ in
-                                    isEdited = hasChanges()
-                                }
-                        }
+                GeometryReader { geometry in
+                    VStack(alignment: .leading, spacing: 20) {
+                        TextField("Work Period", text: $editedWorkPeriod)
+                            .font(.system(size: 38, weight: .light))
+                            .textFieldStyle(.plain)
+                            .onChange(of: editedWorkPeriod) { _, _ in
+                                isEdited = hasChanges()
+                            }
                         
-                        HStack {
-                            Text("Stylist:")
-                                .foregroundColor(.gray)
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Enter stylist", text: $editedStylist)
-                                .textFieldStyle(.plain)
-                                .onChange(of: editedStylist) { _, _ in
-                                    isEdited = hasChanges()
-                                }
+                        ImageCollectionViewWithDialog(gridManager: GridManager.shared) { selectedIndexes in
+                            GridManager.shared.selectedItemIndexes = selectedIndexes
                         }
+                        .frame(height: geometry.size.height - 220) // Increased by 40 to move form up
                         
-                        HStack {
-                            Text("Hair:")
-                                .foregroundColor(.gray)
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Enter hair", text: $editedHair)
-                                .textFieldStyle(.plain)
-                                .onChange(of: editedHair) { _, _ in
-                                    isEdited = hasChanges()
+                        HStack(alignment: .bottom, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                HStack {
+                                    Text("Talent:")
+                                        .foregroundColor(.gray)
+                                        .frame(width: 80, alignment: .trailing)
+                                    TextField("Enter talent", text: $editedTalent)
+                                        .textFieldStyle(.plain)
+                                        .onChange(of: editedTalent) { _, _ in
+                                            isEdited = hasChanges()
+                                        }
                                 }
-                        }
-                        
-                        HStack {
-                            Text("Makeup:")
-                                .foregroundColor(.gray)
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Enter makeup", text: $editedMakeup)
-                                .textFieldStyle(.plain)
-                                .onChange(of: editedMakeup) { _, _ in
-                                    isEdited = hasChanges()
+                                
+                                HStack {
+                                    Text("Stylist:")
+                                        .foregroundColor(.gray)
+                                        .frame(width: 80, alignment: .trailing)
+                                    TextField("Enter stylist", text: $editedStylist)
+                                        .textFieldStyle(.plain)
+                                        .onChange(of: editedStylist) { _, _ in
+                                            isEdited = hasChanges()
+                                        }
                                 }
-                        }
-                    }
-                    .font(.system(size: 16))
-                    .padding(.bottom, 20)
-                    
-                    HStack {
-                        Button("Add Photos") {
-                            if let selectedWork = works.first(where: { $0.id == selectedWorkId }),
-                               let workPath = selectedWork.path {
-                                addManager.showOpenPanel(workId: selectedWork.id, workPath: workPath)
+                                
+                                HStack {
+                                    Text("Hair:")
+                                        .foregroundColor(.gray)
+                                        .frame(width: 80, alignment: .trailing)
+                                    TextField("Enter hair", text: $editedHair)
+                                        .textFieldStyle(.plain)
+                                        .onChange(of: editedHair) { _, _ in
+                                            isEdited = hasChanges()
+                                        }
+                                }
+                                
+                                HStack {
+                                    Text("Makeup:")
+                                        .foregroundColor(.gray)
+                                        .frame(width: 80, alignment: .trailing)
+                                    TextField("Enter makeup", text: $editedMakeup)
+                                        .textFieldStyle(.plain)
+                                        .onChange(of: editedMakeup) { _, _ in
+                                            isEdited = hasChanges()
+                                        }
+                                }
+                            }
+                            .font(.system(size: 16))
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing) {
+                                Spacer()
+                                HStack(spacing: 12) {
+                                    Button("Add Photos") {
+                                        if let selectedWork = works.first(where: { $0.id == selectedWorkId }),
+                                           let workPath = selectedWork.path {
+                                            addManager.showOpenPanel(workId: selectedWork.id, workPath: workPath)
+                                        }
+                                    }
+                                
+                                    Button("Remove Work") {
+                                        // Action will be implemented later
+                                    }
+                                    .foregroundColor(.red)
+                                
+                                    Button(action: {
+                                        saveChanges()
+                                    }) {
+                                        Text("Save")
+                                            .foregroundColor(isEdited ? .blue : .gray)
+                                    }
+                                    .disabled(!isEdited)
+                                }
                             }
                         }
-                        .padding()
-                        
-                        Button("Remove Work") {
-                            // Action will be implemented later
-                        }
-                        .foregroundColor(.red)
-                        .padding()
-                        
-                        Button(action: {
-                            saveChanges()
-                        }) {
-                            Text("Save")
-                                .foregroundColor(isEdited ? .blue : .gray)
-                        }
-                        .disabled(!isEdited)
-                        .padding()
                     }
                 }
                 .padding(40)
-                .padding([.top],10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Button {
-                            columnVisibility = columnVisibility == .all ? .detailOnly : .all
-                        } label: {
-                            Image(systemName: "sidebar.left")
-                        }
-                    }
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Text("Select a work")
                     .toolbar {
