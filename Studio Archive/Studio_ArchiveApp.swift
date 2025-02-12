@@ -9,6 +9,9 @@ import SwiftUI
 
 @main
 struct Studio_ArchiveApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var aboutWindowState = AboutWindowState()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -26,6 +29,23 @@ struct Studio_ArchiveApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            CommandGroup(replacing: .appInfo) {
+                Button("About Studio Archive") {
+                    aboutWindowState.showAboutWindow()
+                }
+            }
         }
+    }
+}
+
+class AboutWindowState: ObservableObject {
+    private var aboutWindowController: AboutWindowController?
+    
+    func showAboutWindow() {
+        if aboutWindowController == nil {
+            aboutWindowController = AboutWindowController()
+        }
+        aboutWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

@@ -265,6 +265,21 @@ struct ContentView: View {
                             }
                         }
                         .padding()
+                        
+                        Button("Remove Work") {
+                            // Action will be implemented later
+                        }
+                        .foregroundColor(.red)
+                        .padding()
+                        
+                        Button(action: {
+                            saveChanges()
+                        }) {
+                            Text("Save")
+                                .foregroundColor(isEdited ? .blue : .gray)
+                        }
+                        .disabled(!isEdited)
+                        .padding()
                     }
                 }
                 .padding(40)
@@ -278,16 +293,6 @@ struct ContentView: View {
                             Image(systemName: "sidebar.left")
                         }
                     }
-                    
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: {
-                            saveChanges()
-                        }) {
-                            Text("Save")
-                                .foregroundColor(isEdited ? .blue : .gray)
-                        }
-                        .disabled(!isEdited)
-                    }
                 }
             } else {
                 Text("Select a work")
@@ -298,14 +303,6 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: "sidebar.left")
                             }
-                        }
-                        
-                        ToolbarItem(placement: .primaryAction) {
-                            Button(action: {}) {
-                                Text("Save")
-                                    .foregroundColor(.gray)
-                            }
-                            .disabled(true)
                         }
                     }
             }
