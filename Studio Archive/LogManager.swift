@@ -85,21 +85,27 @@ class LogManager {
         }
     }
     
-    func clearOldLogs(olderThan days: Int = 30) {
+    func clearOldLogs(olderThan days: Int = 7) -> (deleted: Int, remaining: Int) {
+        var deletedCount = 0
+        var remainingCount = 0
         do {
             let files = try fileManager.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: [.creationDateKey])
             let oldDate = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
             
             for file in files {
-                if let creationDate = try file.resourceValues(forKeys: [.creationDateKey]).creationDate,
-                   creationDate < oldDate {
-                    try fileManager.removeItem(at: file)
+                if let creationDate = try file.resourceValues(forKeys: [.creationDateKey]).creationDate {
+                    if creationDate < oldDate {
+                        try fileManager.removeItem(at: file)
+                        deletedCount += 1
+                    } else {
+                        remainingCount += 1
+                    }
                 }
             }
         } catch {
-            // Use print for cleanup errors since they're not critical
             print("Error clearing old logs: \(error)")
         }
+        return (deletedCount, remainingCount)
     }
     
     func logError(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {

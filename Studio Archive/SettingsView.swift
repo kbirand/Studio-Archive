@@ -6,6 +6,10 @@ struct SettingsView: View {
     @StateObject private var gridManager = GridManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var isFilePickerPresented = false
+    @State private var showLogClearAlert = false
+    @State private var logsClearedCount = 0
+    @State private var logsRemainingCount = 0
+    @State private var showCacheClearAlert = false
     @State private var gridItemSize: Double
     @State private var rootFolderPath: String
     @State private var batchSize: Double
@@ -152,12 +156,20 @@ struct SettingsView: View {
                             Spacer()
                             
                             Button {
-                                gridManager.deleteCache()
+                                showCacheClearAlert = true
                             } label: {
                                 Label("Clear Cache", systemImage: "trash")
                                     .foregroundColor(.red)
                             }
                             .buttonStyle(.borderless)
+                            .alert("Clear Image Cache?", isPresented: $showCacheClearAlert) {
+                                Button("Cancel", role: .cancel) { }
+                                Button("Clear Cache", role: .destructive) {
+                                    gridManager.deleteCache()
+                                }
+                            } message: {
+                                Text("This will delete all cached thumbnail images. The thumbnails will be regenerated when needed.")
+                            }
                         }
                         
                         Text("Deletes all cached thumbnail images to free up space")
@@ -255,13 +267,25 @@ struct SettingsView: View {
                             }
                             
                             Button(role: .destructive) {
-                                logManager.clearOldLogs(olderThan: 30)
+                                let result = logManager.clearOldLogs(olderThan: 7)
+                                logsClearedCount = result.deleted
+                                logsRemainingCount = result.remaining
+                                showLogClearAlert = true
                             } label: {
-                                Label("Clear Old Logs", systemImage: "trash")
+                                Label("Clear Old Logs (>7 days)", systemImage: "trash")
                                     .foregroundColor(.red)
                             }
                             .buttonStyle(.borderless)
                             .padding(.top, 2)
+                            .alert("Logs Cleared", isPresented: $showLogClearAlert) {
+                                Button("OK", role: .cancel) { }
+                            } message: {
+                                if logsClearedCount > 0 {
+                                    Text("\(logsClearedCount) log file\(logsClearedCount == 1 ? " was" : "s were") deleted.\nYou have \(logsRemainingCount) recent log file\(logsRemainingCount == 1 ? "" : "s") remaining.")
+                                } else {
+                                    Text("No log files older than 7 days were found.\nYou have \(logsRemainingCount) recent log file\(logsRemainingCount == 1 ? "" : "s").")
+                                }
+                            }
                         }
                     }
                 } header: {

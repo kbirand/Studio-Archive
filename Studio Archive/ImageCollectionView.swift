@@ -318,6 +318,7 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     fileprivate var imageLayer: CALayer?
     private var progressIndicator: NSProgressIndicator?
     private var filenameLabel: NSTextField?
+    private var filenameBgView: NSView?
     private var gridItem: GridManager.GridItem?
     
     override func loadView() {
@@ -338,54 +339,41 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     }
     
     private func setupFilenameLabel() {
+        // Create background view for the label
+        let backgroundView = NSView()
+        backgroundView.wantsLayer = true
+        backgroundView.layer?.backgroundColor = NSColor.gray.withAlphaComponent(0.65).cgColor
+        backgroundView.layer?.cornerRadius = 4
+        containerView?.addSubview(backgroundView)
+        filenameBgView = backgroundView
+        
         let label = NSTextField(labelWithString: "")
         label.alignment = .center
         label.lineBreakMode = .byTruncatingMiddle
         label.maximumNumberOfLines = 1
         label.font = .systemFont(ofSize: 11)
-        label.textColor = .secondaryLabelColor
+        label.textColor = .white
         label.isHidden = !GridManager.shared.showFilenames
-        containerView?.addSubview(label)
+        backgroundView.addSubview(label)
         
+        // Setup constraints for background view
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            backgroundView.leadingAnchor.constraint(equalTo: containerView!.leadingAnchor, constant: 4),
+            backgroundView.trailingAnchor.constraint(equalTo: containerView!.trailingAnchor, constant: -4),
+            backgroundView.bottomAnchor.constraint(equalTo: containerView!.bottomAnchor, constant: -4)
+        ])
+        
+        // Setup constraints for label
         label.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: containerView!.leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: containerView!.trailingAnchor, constant: -4),
-            label.bottomAnchor.constraint(equalTo: containerView!.bottomAnchor, constant: -4)
+            label.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor, constant: -4),
+            label.topAnchor.constraint(equalTo: backgroundView.topAnchor, constant: 2),
+            label.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -2)
         ])
         
         filenameLabel = label
-    }
-    
-    func configure(with item: GridManager.GridItem) {
-        self.gridItem = item
-        setImage(GridManager.shared.getImage(for: item.id))
-        
-        // Update filename
-        let filename = (item.originalPath as NSString).lastPathComponent
-        filenameLabel?.stringValue = filename
-        filenameLabel?.isHidden = !GridManager.shared.showFilenames
-    }
-    
-    private func setupImageLayer() {
-        // Create progress indicator
-        let progress = NSProgressIndicator(frame: .zero)
-        progress.style = .spinning
-        progress.controlSize = .regular
-        progress.isIndeterminate = true
-        progress.startAnimation(nil)
-        containerView?.addSubview(progress)
-        
-        // Create image layer
-        let layer = CALayer()
-        layer.masksToBounds = true
-        layer.cornerRadius = 8  // Match container corner radius
-        layer.contentsGravity = .resizeAspectFill  // Use aspect fill
-        layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 1.0
-        containerView?.layer?.addSublayer(layer)
-        
-        imageLayer = layer
-        progressIndicator = progress
     }
     
     override func viewDidLayout() {
@@ -433,27 +421,16 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
         }
     }
     
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.removeAllItems()
+    func configure(with item: GridManager.GridItem) {
+        self.gridItem = item
+        setImage(GridManager.shared.getImage(for: item.id))
         
-        if gridItem == nil { return }
-        
-        // Copy File
-        let copyItem = NSMenuItem(title: "Copy", action: #selector(copyFile), keyEquivalent: "")
-        copyItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
-        menu.addItem(copyItem)
-        
-        // Show in Finder
-        let finderItem = NSMenuItem(title: "Show in Finder", action: #selector(openInFinder), keyEquivalent: "")
-        finderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
-        menu.addItem(finderItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // Delete
-        let deleteItem = NSMenuItem(title: "Delete", action: #selector(deleteFile), keyEquivalent: "")
-        deleteItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
-        menu.addItem(deleteItem)
+        // Update filename
+        let filename = (item.originalPath as NSString).lastPathComponent
+        filenameLabel?.stringValue = filename
+        let showFilenames = GridManager.shared.showFilenames
+        filenameLabel?.isHidden = !showFilenames
+        filenameBgView?.isHidden = !showFilenames
     }
     
     @objc private func copyFile() {
@@ -511,5 +488,57 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     @objc private func openInFinder() {
         guard let gridItem = gridItem else { return }
         ContextManager.shared.openInFinder(path: gridItem.originalPath)
+    }
+    
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        
+        if gridItem == nil { return }
+        
+        // Copy File
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(copyFile), keyEquivalent: "")
+        copyItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
+        menu.addItem(copyItem)
+        
+        // Show in Finder
+        let finderItem = NSMenuItem(title: "Show in Finder", action: #selector(openInFinder), keyEquivalent: "")
+        finderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+        menu.addItem(finderItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Delete
+        let deleteItem = NSMenuItem(title: "Delete", action: #selector(deleteFile), keyEquivalent: "")
+        deleteItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
+        menu.addItem(deleteItem)
+    }
+    
+    private func setupImageLayer() {
+        // Create progress indicator
+        let progress = NSProgressIndicator(frame: .zero)
+        progress.style = .spinning
+        progress.controlSize = .regular
+        progress.isIndeterminate = true
+        progress.startAnimation(nil)
+        containerView?.addSubview(progress)
+        
+        // Create image layer
+        let layer = CALayer()
+        layer.masksToBounds = true
+        layer.cornerRadius = 8  // Match container corner radius
+        layer.contentsGravity = .resizeAspectFill  // Use aspect fill
+        layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 1.0
+        containerView?.layer?.addSublayer(layer)
+        
+        imageLayer = layer
+        progressIndicator = progress
+    }
+    
+    @objc private func updateBackgroundColor() {
+        // No longer needed since we're using fixed colors
+    }
+    
+    deinit {
+        // No longer need to remove observer since we're not using it anymore
     }
 }
