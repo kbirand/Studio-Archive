@@ -96,8 +96,8 @@ class WorksManager: ObservableObject {
         
         // Bind the work period
         sqlite3_bind_text(statement, 1, (workPeriod as NSString).utf8String, -1, nil)
-        // Bind the path
-        sqlite3_bind_text(statement, 2, (folderURL.path as NSString).utf8String, -1, nil)
+        // Bind the path - store only the folder name instead of full path
+        sqlite3_bind_text(statement, 2, (folderName as NSString).utf8String, -1, nil)
         
         if sqlite3_step(statement) != SQLITE_DONE {
             errorMessage = "Failed to insert work"

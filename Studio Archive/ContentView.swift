@@ -259,7 +259,10 @@ struct ContentView: View {
                     
                     HStack {
                         Button("Add Photos") {
-                            addManager.showOpenPanel()
+                            if let selectedWork = works.first(where: { $0.id == selectedWorkId }),
+                               let workPath = selectedWork.path {
+                                addManager.showOpenPanel(workId: selectedWork.id, workPath: workPath)
+                            }
                         }
                         .padding()
                     }
@@ -383,5 +386,3 @@ struct ContentView: View {
 #Preview {
     ContentView()
 }
-
-
