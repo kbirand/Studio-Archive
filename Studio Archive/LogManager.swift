@@ -60,7 +60,13 @@ class LogManager {
         let fileURL = URL(fileURLWithPath: file)
         let fileName = fileURL.lastPathComponent
         
-        let logMessage = "[\(timestamp)] [\(type.rawValue)] [\(fileName):\(line)] \(function): \(message)\n"
+        let logMessage = "[\(timestamp)] [\(type.rawValue)] [\(fileName):\(line)] \(function): \(message)"
+        
+        // Print to standard output
+        print(logMessage)
+        
+        // Add newline for file
+        let fileLogMessage = logMessage + "\n"
         
         do {
             if !fileManager.fileExists(atPath: logFile.path) {
@@ -69,7 +75,7 @@ class LogManager {
             
             let handle = try FileHandle(forWritingTo: logFile)
             handle.seekToEndOfFile()
-            if let data = logMessage.data(using: .utf8) {
+            if let data = fileLogMessage.data(using: .utf8) {
                 handle.write(data)
             }
             handle.closeFile()

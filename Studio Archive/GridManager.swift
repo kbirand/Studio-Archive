@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import ImageIO
 
 class GridManager: ObservableObject, @unchecked Sendable {
     static let shared = GridManager()
@@ -14,6 +15,9 @@ class GridManager: ObservableObject, @unchecked Sendable {
     private let cacheFolderName = "ImageCache"
     private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
     private var imageCache: [Int: NSImage] = [:]  // Separate image cache
+    private let maxCacheSize = 100 // Maximum number of images to keep in memory
+    private var imageCacheQueue = DispatchQueue(label: "com.studiarchive.imagecache")
+    private var imageAccessTimes: [Int: Date] = [:] // Track when each image was last accessed
     
     // Maximum possible batch size based on CPU cores
     private var maxBatchSize: Int {
@@ -81,6 +85,9 @@ class GridManager: ObservableObject, @unchecked Sendable {
             LogManager.shared.log("GridManager: Root path not found in UserDefaults", type: .warning)
             return
         }
+        
+        // Clear the cache before loading new work
+        clearCache()
         
         guard let bookmarkData = defaults.data(forKey: "RootFolderBookmark") else {
             LogManager.shared.log("GridManager: Root folder bookmark not found", type: .warning)
@@ -190,9 +197,25 @@ class GridManager: ObservableObject, @unchecked Sendable {
                             
                             // If not in cache or failed to load from cache, generate it
                             if imageData == nil && self.fileManager.fileExists(atPath: originalPath) {
-                                LogManager.shared.log("Generating cache", type: .debug)
+                                LogManager.shared.log("Attempting to load thumbnail for: \(originalPath)", type: .debug)
                                 do {
-                                    if let image = NSImage(contentsOfFile: originalPath) {
+                                    // First try to get embedded thumbnail
+                                    if let embeddedThumbnail = self.extractEmbeddedThumbnail(from: originalPath) {
+                                        if let tiffData = embeddedThumbnail.tiffRepresentation,
+                                           let bitmapRep = NSBitmapImageRep(data: tiffData),
+                                           let jpegData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) {
+                                            imageData = jpegData
+                                            try imageData?.write(to: URL(fileURLWithPath: cachePath))
+                                            LogManager.shared.log("Successfully saved embedded thumbnail to cache: \(cachePath)", type: .debug)
+                                        } else {
+                                            LogManager.shared.log("Failed to convert embedded thumbnail to JPEG", type: .warning)
+                                        }
+                                    } else {
+                                        LogManager.shared.log("No embedded thumbnail found, falling back to full image", type: .debug)
+                                    }
+                                    
+                                    // If no embedded thumbnail, fall back to generating one
+                                    if imageData == nil, let image = NSImage(contentsOfFile: originalPath) {
                                         // Calculate target size maintaining aspect ratio
                                         let originalSize = image.size
                                         var targetSize = originalSize
@@ -283,18 +306,91 @@ class GridManager: ObservableObject, @unchecked Sendable {
         }
     }
     
+    private func extractEmbeddedThumbnail(from path: String) -> NSImage? {
+        LogManager.shared.log("Attempting to extract thumbnail from: \(path)", type: .debug)
+        
+        guard let imageSource = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, [
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true
+        ] as CFDictionary) else {
+            LogManager.shared.log("Failed to create image source for: \(path)", type: .warning)
+            return nil
+        }
+        
+        // Create thumbnail with optimized options
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 800,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceShouldAllowFloat: false,
+            kCGImageSourceSubsampleFactor: 4
+        ]
+        
+        guard let thumbnailImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
+            LogManager.shared.log("Failed to create thumbnail", type: .warning)
+            return nil
+        }
+        
+        return autoreleasepool { () -> NSImage in
+            let nsImage = NSImage(cgImage: thumbnailImage, size: NSSize.zero)
+            LogManager.shared.log("Created thumbnail with size: \(nsImage.size)", type: .debug)
+            return nsImage
+        }
+    }
+    
     // Helper methods for image access
+    private func cleanupCache() {
+        imageCacheQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // If cache size is under limit, no cleanup needed
+            if self.imageCache.count <= self.maxCacheSize {
+                return
+            }
+            
+            // Sort by access time, oldest first
+            let sortedItems = self.imageAccessTimes.sorted { $0.value < $1.value }
+            
+            // Remove oldest items until we're under the limit
+            let itemsToRemove = self.imageCache.count - self.maxCacheSize
+            for i in 0..<itemsToRemove {
+                let itemId = sortedItems[i].key
+                self.imageCache.removeValue(forKey: itemId)
+                self.imageAccessTimes.removeValue(forKey: itemId)
+            }
+            
+            LogManager.shared.log("Cleaned up \(itemsToRemove) items from image cache", type: .debug)
+        }
+    }
+    
     func getImage(for itemId: Int) -> NSImage? {
+        imageCacheQueue.sync {
+            imageAccessTimes[itemId] = Date()
+        }
         return imageCache[itemId]
     }
     
     private func setImage(for itemId: Int, image: NSImage?) {
-        if let image = image {
-            imageCache[itemId] = image
-        } else {
-            imageCache.removeValue(forKey: itemId)
+        imageCacheQueue.sync {
+            if let image = image {
+                imageCache[itemId] = image
+                imageAccessTimes[itemId] = Date()
+                cleanupCache()
+            } else {
+                imageCache.removeValue(forKey: itemId)
+                imageAccessTimes.removeValue(forKey: itemId)
+            }
         }
-        objectWillChange.send()
+    }
+    
+    // Add a method to clear the cache when switching works
+    func clearCache() {
+        imageCacheQueue.sync {
+            imageCache.removeAll()
+            imageAccessTimes.removeAll()
+            LogManager.shared.log("Cleared image cache", type: .debug)
+        }
     }
     
     func updateOrder(fromIndex: Int, toIndex: Int) {
