@@ -317,13 +317,14 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     fileprivate var containerView: NSView?
     fileprivate var imageLayer: CALayer?
     private var progressIndicator: NSProgressIndicator?
+    private var filenameLabel: NSTextField?
     private var gridItem: GridManager.GridItem?
     
     override func loadView() {
         let containerView = NSView()
         containerView.wantsLayer = true
-        containerView.layer?.cornerRadius = 8  // Add corner radius
-        containerView.layer?.masksToBounds = true  // Ensure corners are clipped
+        containerView.layer?.cornerRadius = 8
+        containerView.layer?.masksToBounds = true
         self.containerView = containerView
         self.view = containerView
         
@@ -333,11 +334,37 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
         containerView.menu = menu
         
         setupImageLayer()
+        setupFilenameLabel()
+    }
+    
+    private func setupFilenameLabel() {
+        let label = NSTextField(labelWithString: "")
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingMiddle
+        label.maximumNumberOfLines = 1
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = .secondaryLabelColor
+        label.isHidden = !GridManager.shared.showFilenames
+        containerView?.addSubview(label)
+        
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: containerView!.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: containerView!.trailingAnchor, constant: -4),
+            label.bottomAnchor.constraint(equalTo: containerView!.bottomAnchor, constant: -4)
+        ])
+        
+        filenameLabel = label
     }
     
     func configure(with item: GridManager.GridItem) {
         self.gridItem = item
         setImage(GridManager.shared.getImage(for: item.id))
+        
+        // Update filename
+        let filename = (item.originalPath as NSString).lastPathComponent
+        filenameLabel?.stringValue = filename
+        filenameLabel?.isHidden = !GridManager.shared.showFilenames
     }
     
     private func setupImageLayer() {

@@ -9,6 +9,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
     @Published var selectedItemIndexes: Set<Int> = []
     @Published var gridItemSize: CGFloat = UserDefaults.standard.float(forKey: "GridItemSize") == 0 ? 200 : CGFloat(UserDefaults.standard.float(forKey: "GridItemSize"))
     @Published private(set) var progress: (current: Int, total: Int)?
+    @Published var showFilenames: Bool = UserDefaults.standard.bool(forKey: "ShowFilenames")
     
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
@@ -78,6 +79,11 @@ class GridManager: ObservableObject, @unchecked Sendable {
     func updateGridItemSize(_ size: CGFloat) {
         gridItemSize = size
         defaults.set(Float(size), forKey: "GridItemSize")
+    }
+    
+    func updateShowFilenames(_ show: Bool) {
+        showFilenames = show
+        defaults.set(show, forKey: "ShowFilenames")
     }
     
     func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int)]) {

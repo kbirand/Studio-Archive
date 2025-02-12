@@ -124,6 +124,17 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                        
+                        Toggle(isOn: Binding(
+                            get: { gridManager.showFilenames },
+                            set: { gridManager.updateShowFilenames($0) }
+                        )) {
+                            Label("Show Filenames", systemImage: "text.below.photo")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 } header: {
                     Text("Appearance")
