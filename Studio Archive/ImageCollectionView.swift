@@ -26,8 +26,9 @@ struct ImageCollectionView: NSViewRepresentable {
                               forItemWithIdentifier: NSUserInterfaceItemIdentifier("ImageCell"))
         
         // Enable drag and drop
+        collectionView.setDraggingSourceOperationMask([.copy, .move], forLocal: false) // Allow copy to Finder
         collectionView.setDraggingSourceOperationMask(.move, forLocal: true)
-        collectionView.registerForDraggedTypes([.string])
+        collectionView.registerForDraggedTypes([.fileURL])
         
         // Configure scroll view
         scrollView.documentView = collectionView
@@ -131,7 +132,12 @@ struct ImageCollectionView: NSViewRepresentable {
         }
         
         func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
-            return String(indexPath.item) as NSString
+            LogManager.shared.log("Attempting to create pasteboard writer for item at index \(indexPath.item)", type: .debug)
+            let gridItem = parent.gridManager.items[indexPath.item]
+            let originalPath = gridItem.originalPath
+            let fileURL = URL(fileURLWithPath: originalPath)
+            LogManager.shared.log("Created file URL for drag: \(fileURL)", type: .debug)
+            return fileURL as NSURL
         }
         
         func collectionView(_ collectionView: NSCollectionView, validateDrop draggingInfo: NSDraggingInfo, proposedIndexPath proposedDropIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>, dropOperation proposedDropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
@@ -140,8 +146,10 @@ struct ImageCollectionView: NSViewRepresentable {
         }
         
         func collectionView(_ collectionView: NSCollectionView, acceptDrop draggingInfo: NSDraggingInfo, indexPath: IndexPath, dropOperation: NSCollectionView.DropOperation) -> Bool {
+            LogManager.shared.log("Accepting drop at index \(indexPath.item)", type: .debug)
             guard let draggedItem = draggingInfo.draggingPasteboard.string(forType: .string),
                   let fromIndex = Int(draggedItem) else {
+                LogManager.shared.log("Failed to get dragged item", type: .warning)
                 return false
             }
             
