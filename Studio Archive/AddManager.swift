@@ -53,13 +53,22 @@ class AddManager: ObservableObject {
         do {
             let fileManager = FileManager.default
             
+            // Get root folder path from UserDefaults
+            guard let rootPath = UserDefaults.standard.string(forKey: "RootFolderPath") else {
+                logManager.log("Root folder path not found", type: .error)
+                return
+            }
+            
+            // Create full destination path by combining root path and work path
+            let fullPath = (rootPath as NSString).appendingPathComponent(workPath)
+            let destinationDirUrl = URL(fileURLWithPath: fullPath, isDirectory: true)
+            
             // Create destination directory if it doesn't exist
-            let destinationDirUrl = URL(fileURLWithPath: workPath)
-            if !fileManager.fileExists(atPath: workPath) {
+            if !fileManager.fileExists(atPath: destinationDirUrl.path) {
                 try fileManager.createDirectory(at: destinationDirUrl, withIntermediateDirectories: true)
             }
             
-            // Generate destination URL
+            // Generate destination URL with full path
             let destinationUrl = destinationDirUrl.appendingPathComponent(url.lastPathComponent)
             
             // Copy file to destination
@@ -68,9 +77,9 @@ class AddManager: ObservableObject {
             }
             try fileManager.copyItem(at: url, to: destinationUrl)
             
-            // Add entry to database
-            let relativePath = destinationUrl.lastPathComponent
-            let stmt = "INSERT INTO files (work_id, path, file_order) SELECT ?, ?, COALESCE(MAX(file_order), 0) + 1 FROM files WHERE work_id = ?"
+            // Add entry to database - only store filename, not path
+            let filename = url.lastPathComponent
+            let stmt = "INSERT INTO files (workid, file, ordered) VALUES (?, ?, (SELECT COALESCE(MAX(ordered), 0) + 1 FROM files WHERE workid = ?))"
             
             guard let db = databaseManager.getDatabase() else {
                 logManager.log("Database not available", type: .error)
@@ -80,7 +89,7 @@ class AddManager: ObservableObject {
             var statement: OpaquePointer?
             if sqlite3_prepare_v2(db, stmt, -1, &statement, nil) == SQLITE_OK {
                 sqlite3_bind_int(statement, 1, Int32(workId))
-                sqlite3_bind_text(statement, 2, (relativePath as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(statement, 2, (filename as NSString).utf8String, -1, nil)
                 sqlite3_bind_int(statement, 3, Int32(workId))
                 
                 if sqlite3_step(statement) != SQLITE_DONE {
