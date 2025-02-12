@@ -6,6 +6,13 @@ struct AddWorkView: View {
     @State private var workTitle = ""
     var onWorkAdded: () -> Void
     
+    private var isRootFolderSet: Bool {
+        if let rootPath = UserDefaults.standard.string(forKey: "RootFolderPath") {
+            return rootPath != "Not Selected"
+        }
+        return false
+    }
+    
     var body: some View {
         VStack(spacing: 20) {
             Text("Add New Work")
@@ -27,7 +34,7 @@ struct AddWorkView: View {
                     }
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(workTitle.isEmpty)
+                .disabled(workTitle.isEmpty || !isRootFolderSet)
             }
         }
         .padding()

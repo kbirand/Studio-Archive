@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var selectedWorkId: Int?
     @State private var searchText = ""
+    @State private var showAddPhotosDialog = false
     
     // Editing states
     @State private var editedWorkPeriod: String = ""
@@ -36,6 +37,8 @@ struct ContentView: View {
     @State private var originalStylist: String = ""
     @State private var originalHair: String = ""
     @State private var originalMakeup: String = ""
+    
+    private let addManager = AddManager()
     
     private func loadSelectedWork(id: Int) {
         if let selectedWork = works.first(where: { $0.id == id }) {
@@ -253,6 +256,13 @@ struct ContentView: View {
                     }
                     .font(.system(size: 16))
                     .padding(.bottom, 20)
+                    
+                    HStack {
+                        Button("Add Photos") {
+                            addManager.showOpenPanel()
+                        }
+                        .padding()
+                    }
                 }
                 .padding(40)
                 .padding([.top],10)
@@ -373,3 +383,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
 }
+
+
