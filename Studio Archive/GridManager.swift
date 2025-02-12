@@ -81,13 +81,23 @@ class GridManager: ObservableObject, @unchecked Sendable {
     }
     
     func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int)]) {
+        // Clear existing items and cache before checking for duplicates
+        items.removeAll()
+        clearCache()
+        
+        // Check if we're already loading these exact same files
+        let newFileIds = Set(files.map { $0.id })
+        let currentFileIds = Set(items.map { $0.id })
+        
+        if newFileIds == currentFileIds && !items.isEmpty {
+            LogManager.shared.log("GridManager: Skipping load as these files are already loaded", type: .debug)
+            return
+        }
+        
         guard let rootPath = defaults.string(forKey: "RootFolderPath") else {
             LogManager.shared.log("GridManager: Root path not found in UserDefaults", type: .warning)
             return
         }
-        
-        // Clear the cache before loading new work
-        clearCache()
         
         guard let bookmarkData = defaults.data(forKey: "RootFolderBookmark") else {
             LogManager.shared.log("GridManager: Root folder bookmark not found", type: .warning)

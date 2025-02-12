@@ -19,9 +19,19 @@ class DetailsManager: ObservableObject {
         DatabaseManager.shared.db
     }
     
+    private var currentWorkId: Int?
+    
     private init() {}
     
     func fetchFiles(forWorkId workId: Int, completion: @escaping () -> Void = {}) {
+        // Skip if we're already showing files for this work
+        if currentWorkId == workId && !files.isEmpty {
+            LogManager.shared.log("DetailsManager: Files for work ID \(workId) already loaded", type: .debug)
+            return
+        }
+        
+        currentWorkId = workId
+        
         guard let db = db else {
             LogManager.shared.log("Database connection is not initialized", type: .error)
             return

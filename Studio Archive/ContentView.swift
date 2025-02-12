@@ -42,6 +42,10 @@ struct ContentView: View {
     
     private func loadSelectedWork(id: Int) {
         if let selectedWork = works.first(where: { $0.id == id }) {
+            // Initialize editing states first
+            initializeEditingStates(with: selectedWork)
+            
+            // Always fetch files for initial load
             detailsManager.fetchFiles(forWorkId: id) {
                 // Load images only after files are fetched
                 GridManager.shared.loadImages(
@@ -49,15 +53,14 @@ struct ContentView: View {
                     files: self.detailsManager.files.map { ($0.id, $0.file, $0.ordered) }
                 )
             }
-            initializeEditingStates(with: selectedWork)
         }
     }
     
     private func loadWorksAndSelectFirst() {
         works = databaseManager.fetchWorks()
         if let firstWork = works.first {
+            currentEditingId = nil  // Reset this to ensure initial load works
             selectedWorkId = firstWork.id
-            currentEditingId = firstWork.id
             loadSelectedWork(id: firstWork.id)
         }
     }
@@ -305,9 +308,11 @@ struct ContentView: View {
             if hasChanges() {
                 pendingWorkId = newId
                 showUnsavedChangesAlert = true
-            } else {
-                if let newId = newId {
+            } else if let newId = newId {
+                // Only load if we're not already showing this work
+                if currentEditingId != newId {
                     loadSelectedWork(id: newId)
+                    currentEditingId = newId
                 }
             }
         }
@@ -317,11 +322,11 @@ struct ContentView: View {
             }
             Button("Discard Changes", role: .destructive) {
                 if let pendingId = pendingWorkId {
+                    // Set the ID first
                     selectedWorkId = pendingId
-                    if let selectedWork = works.first(where: { $0.id == pendingId }) {
-                        initializeEditingStates(with: selectedWork)
-                        detailsManager.fetchFiles(forWorkId: pendingId)
-                    }
+                    
+                    // Then load the work (this will handle both state initialization and file loading)
+                    loadSelectedWork(id: pendingId)
                 }
                 pendingWorkId = nil
             }
