@@ -9,6 +9,7 @@ class DetailsManager: ObservableObject {
         let workId: Int
         let file: String
         let ordered: Int
+        let visible: Bool?
     }
     
     @Published var files: [File] = []
@@ -40,7 +41,7 @@ class DetailsManager: ObservableObject {
         LogManager.shared.log("DetailsManager: Fetching files for work ID: \(workId)", type: .info)
         
         let queryString = """
-            SELECT id, workid, file, ordered
+            SELECT id, workid, file, ordered, visible
             FROM files
             WHERE workid = ?
             ORDER BY ordered DESC
@@ -49,43 +50,30 @@ class DetailsManager: ObservableObject {
         var statement: OpaquePointer?
         
         guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
-            LogManager.shared.log("Error preparing statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            LogManager.shared.log("Failed to prepare statement: \(String(cString: sqlite3_errmsg(db)!))", type: .error)
             return
         }
         
         sqlite3_bind_int(statement, 1, Int32(workId))
         
-        var tempFiles: [File] = []
+        var newFiles: [File] = []
         
         while sqlite3_step(statement) == SQLITE_ROW {
-            let id = sqlite3_column_int64(statement, 0)
-            let workId = sqlite3_column_int64(statement, 1)
+            let id = Int(sqlite3_column_int(statement, 0))
+            let workId = Int(sqlite3_column_int(statement, 1))
+            let file = String(cString: sqlite3_column_text(statement, 2))
+            let ordered = Int(sqlite3_column_int(statement, 3))
+            let visible = sqlite3_column_type(statement, 4) == SQLITE_NULL ? nil : sqlite3_column_int(statement, 4) != 0
             
-            var file: String = ""
-            if let fileText = sqlite3_column_text(statement, 2) {
-                file = String(cString: fileText)
-            }
-            
-            let ordered = sqlite3_column_int64(statement, 3)
-            
-            let fileRecord = File(
-                id: Int(id),
-                workId: Int(workId),
-                file: file,
-                ordered: Int(ordered)
-            )
-            
-            tempFiles.append(fileRecord)
-            //LogManager.shared.log("Found file: \(file) (ID: \(id), Work ID: \(workId), Order: \(ordered))", type: .debug)
+            newFiles.append(File(id: id, workId: workId, file: file, ordered: ordered, visible: visible))
         }
         
         sqlite3_finalize(statement)
         
-        LogManager.shared.log("Total files found: \(tempFiles.count)", type: .info)
+        LogManager.shared.log("Total files found: \(newFiles.count)", type: .info)
         
         DispatchQueue.main.async {
-            self.files = tempFiles
-            //LogManager.shared.log("Updated files array on main thread", type: .debug)
+            self.files = newFiles
             completion()
         }
     }

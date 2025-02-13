@@ -430,6 +430,69 @@ class DatabaseManager: ObservableObject {
         return true
     }
     
+    func fetchFiles(forWorkId workId: Int) -> [(id: Int, path: String, order: Int, visible: Bool)] {
+        var files: [(id: Int, path: String, order: Int, visible: Bool)] = []
+        guard let db = db else {
+            logManager.log("Database connection is not initialized", type: .error)
+            return files
+        }
+        
+        let query = """
+            SELECT id, path, list_order, COALESCE(visible, 1) as visible
+            FROM file
+            WHERE work_id = ?
+            ORDER BY list_order DESC
+        """
+        
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_int(statement, 1, Int32(workId))
+            
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let id = Int(sqlite3_column_int(statement, 0))
+                let path = String(cString: sqlite3_column_text(statement, 1))
+                let order = Int(sqlite3_column_int(statement, 2))
+                let visible = sqlite3_column_int(statement, 3) != 0
+                
+                files.append((id: id, path: path, order: order, visible: visible))
+            }
+        }
+        
+        sqlite3_finalize(statement)
+        return files
+    }
+    
+    func updateFileVisibility(fileId: Int, visible: Bool) -> Bool {
+        guard let db = db else {
+            logManager.log("Database connection is not initialized", type: .error)
+            return false
+        }
+        
+        let query = "UPDATE files SET visible = ? WHERE id = ?"
+        var statement: OpaquePointer?
+        defer {
+            if statement != nil {
+                sqlite3_finalize(statement)
+            }
+        }
+        
+        if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_int(statement, 1, visible ? 1 : 0)
+            sqlite3_bind_int(statement, 2, Int32(fileId))
+            
+            let result = sqlite3_step(statement) == SQLITE_DONE
+            if result {
+                logManager.log("Successfully updated visibility for file ID \(fileId) to \(visible)", type: .info)
+            } else {
+                logManager.log("Failed to update visibility for file ID \(fileId)", type: .error)
+            }
+            return result
+        }
+        
+        logManager.log("Failed to prepare update visibility statement", type: .error)
+        return false
+    }
+    
     enum DatabaseError: Error {
         case notInitialized
         case prepareFailed(String)

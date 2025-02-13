@@ -90,17 +90,18 @@ class AddManager: ObservableObject {
         // Fetch updated files from database and refresh grid
         if let db = databaseManager.getDatabase() {
             var statement: OpaquePointer?
-            let query = "SELECT id, file, ordered FROM files WHERE workid = ? ORDER BY ordered"
+            let query = "SELECT id, file, ordered, COALESCE(visible, 1) as visible FROM files WHERE workid = ? ORDER BY ordered"
             
             if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
                 sqlite3_bind_int(statement, 1, Int32(workId))
                 
-                var files: [(id: Int, path: String, order: Int)] = []
+                var files: [(id: Int, path: String, order: Int, visible: Bool)] = []
                 while sqlite3_step(statement) == SQLITE_ROW {
                     let id = Int(sqlite3_column_int(statement, 0))
                     let file = String(cString: sqlite3_column_text(statement, 1))
                     let order = Int(sqlite3_column_int(statement, 2))
-                    files.append((id: id, path: file, order: order))
+                    let visible = sqlite3_column_int(statement, 3) != 0
+                    files.append((id: id, path: file, order: order, visible: visible))
                 }
                 
                 sqlite3_finalize(statement)

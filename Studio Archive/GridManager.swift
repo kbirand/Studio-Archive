@@ -43,6 +43,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
         let originalPath: String
         let cachePath: String?
         var order: Int
+        var visible: Bool  // Add visible property
         
         static func == (lhs: GridItem, rhs: GridItem) -> Bool {
             return lhs.id == rhs.id
@@ -98,17 +99,12 @@ class GridManager: ObservableObject, @unchecked Sendable {
         defaults.set(show, forKey: "ShowFilenames")
     }
     
-    func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int)]) {
-        // Clear existing items before checking for duplicates
+    func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int, visible: Bool)]) {
+        // Clear existing items and cache
         items.removeAll()
-        
-        // Check if we're already loading these exact same files
-        let newFileIds = Set(files.map { $0.id })
-        let currentFileIds = Set(items.map { $0.id })
-        
-        if newFileIds == currentFileIds && !items.isEmpty {
-            LogManager.shared.log("Same files already loaded, skipping", type: .debug)
-            return
+        imageCacheQueue.async { [weak self] in
+            self?.imageCache.removeAll()
+            self?.imageAccessTimes.removeAll()
         }
         
         guard let rootPath = defaults.string(forKey: "RootFolderPath") else {
@@ -146,7 +142,8 @@ class GridManager: ObservableObject, @unchecked Sendable {
                 id: file.0,
                 originalPath: originalPath,
                 cachePath: cachePath,
-                order: file.2
+                order: file.2,
+                visible: file.3 // Use the visibility from database
             )
         }.sorted { $0.order > $1.order }
         
@@ -560,7 +557,8 @@ class GridManager: ObservableObject, @unchecked Sendable {
                     id: item.id,
                     originalPath: item.originalPath,
                     cachePath: item.cachePath,
-                    order: newOrder
+                    order: newOrder,
+                    visible: item.visible
                 )
                 updatedItems.append((index, newItem))
             }
@@ -648,7 +646,8 @@ class GridManager: ObservableObject, @unchecked Sendable {
                     id: item.id,
                     originalPath: item.originalPath,
                     cachePath: item.cachePath,
-                    order: newOrder
+                    order: newOrder,
+                    visible: item.visible
                 )
                 updatedItems.append((index, newItem))
             }
@@ -728,6 +727,24 @@ class GridManager: ObservableObject, @unchecked Sendable {
             }
         } catch {
             LogManager.shared.log("Error deleting cache: \(error)", type: .error)
+        }
+    }
+    
+    func toggleVisibility(for itemId: Int) {
+        if let index = items.firstIndex(where: { $0.id == itemId }) {
+            let item = items[index]
+            let newVisibility = !item.visible
+            
+            // Update database using DatabaseManager
+            if DatabaseManager.shared.updateFileVisibility(fileId: itemId, visible: newVisibility) {
+                DispatchQueue.main.async {
+                    // Update the item in our array
+                    self.items[index].visible = newVisibility
+                    
+                    // Post notification for any observers that need to refresh
+                    NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                }
+            }
         }
     }
 }

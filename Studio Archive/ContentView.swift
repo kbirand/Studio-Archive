@@ -55,7 +55,9 @@ struct ContentView: View {
                 // Load images only after files are fetched
                 GridManager.shared.loadImages(
                     forWorkPath: selectedWork.path ?? "",
-                    files: self.detailsManager.files.map { ($0.id, $0.file, $0.ordered) }
+                    files: self.detailsManager.files.map { 
+                        (id: $0.id, path: $0.file, order: $0.ordered, visible: $0.visible ?? true)
+                    }
                 )
             }
         }

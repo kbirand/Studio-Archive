@@ -281,6 +281,8 @@ struct ImageCollectionView: NSViewRepresentable {
             
             // Add the file URL for Finder operations
             let fileURL = URL(fileURLWithPath: gridItem.originalPath)
+            
+            // Add the file promise to the pasteboard
             pasteboardItem.setString(fileURL.absoluteString, forType: .fileURL)
             
             return pasteboardItem
@@ -417,6 +419,7 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     private var progressIndicator: NSProgressIndicator?
     private var filenameLabel: NSTextField?
     private var filenameBgView: NSView?
+    private var visibilityCheckbox: NSButton?
     private var gridItem: GridManager.GridItem?
     
     override func loadView() {
@@ -434,6 +437,7 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
         
         setupImageLayer()
         setupFilenameLabel()
+        setupVisibilityCheckbox()
     }
     
     private func setupFilenameLabel() {
@@ -521,14 +525,23 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     
     func configure(with item: GridManager.GridItem) {
         self.gridItem = item
-        setImage(GridManager.shared.getImage(for: item.id))
         
-        // Update filename
-        let filename = (item.originalPath as NSString).lastPathComponent
-        filenameLabel?.stringValue = filename
-        let showFilenames = GridManager.shared.showFilenames
-        filenameLabel?.isHidden = !showFilenames
-        filenameBgView?.isHidden = !showFilenames
+        // Update visibility checkbox state
+        visibilityCheckbox?.state = item.visible ? .on : .off
+        visibilityCheckbox?.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        visibilityCheckbox?.isHidden = !UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        
+        // Configure filename label if showing filenames
+        if GridManager.shared.showFilenames {
+            filenameLabel?.stringValue = (item.originalPath as NSString).lastPathComponent
+            filenameLabel?.isHidden = false
+            filenameBgView?.isHidden = false
+        } else {
+            filenameLabel?.isHidden = true
+            filenameBgView?.isHidden = true
+        }
+        
+        setImage(GridManager.shared.getImage(for: item.id))
     }
     
     @objc private func copyFile() {
@@ -627,6 +640,43 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     @objc private func openInFinder() {
         guard let gridItem = gridItem else { return }
         ContextManager.shared.openInFinder(path: gridItem.originalPath)
+    }
+    
+    private func setupVisibilityCheckbox() {
+        let checkbox = NSButton(checkboxWithTitle: "", target: self, action: #selector(toggleVisibility))
+        checkbox.state = .off
+        checkbox.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        containerView?.addSubview(checkbox)
+        
+        checkbox.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            checkbox.topAnchor.constraint(equalTo: containerView!.topAnchor, constant: 8),
+            checkbox.trailingAnchor.constraint(equalTo: containerView!.trailingAnchor, constant: -8),
+            checkbox.widthAnchor.constraint(equalToConstant: 20),
+            checkbox.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        
+        visibilityCheckbox = checkbox
+        
+        // Listen for visibility settings changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(visibilitySettingsChanged),
+            name: Notification.Name("VisibilitySettingsChanged"),
+            object: nil
+        )
+    }
+    
+    @objc private func visibilitySettingsChanged() {
+        visibilityCheckbox?.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        if let item = gridItem {
+            visibilityCheckbox?.state = item.visible ? .on : .off
+        }
+    }
+    
+    @objc private func toggleVisibility() {
+        guard let gridItem = gridItem else { return }
+        GridManager.shared.toggleVisibility(for: gridItem.id)
     }
     
     func menuNeedsUpdate(_ menu: NSMenu) {
