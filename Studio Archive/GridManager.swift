@@ -740,6 +740,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             let item = items[index]
             let newVisibility = !item.visible
+            let hideInvisible = defaults.bool(forKey: "HideInvisibleWorks")
             
             // Update database using DatabaseManager
             if DatabaseManager.shared.updateFileVisibility(fileId: itemId, visible: newVisibility) {
@@ -747,8 +748,11 @@ class GridManager: ObservableObject, @unchecked Sendable {
                     // Update the item in our array
                     self.items[index].visible = newVisibility
                     
-                    // Post notification for any observers that need to refresh
-                    NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                    // Only post notification if Hide Invisible Works is not enabled
+                    // When it's enabled, the item will be filtered out automatically
+                    if !hideInvisible {
+                        self.objectWillChange.send()
+                    }
                 }
             }
         }
