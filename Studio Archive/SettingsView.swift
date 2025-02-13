@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var rootFolderPath: String
     @State private var batchSize: Double
     @State private var showLogsFinder = false
+    @State private var cacheSize: Double
     
     private let defaults = UserDefaults.standard
     private let logManager = LogManager.shared
@@ -27,6 +28,8 @@ struct SettingsView: View {
         _gridItemSize = State(initialValue: Double(UserDefaults.standard.float(forKey: "GridItemSize")))
         _rootFolderPath = State(initialValue: UserDefaults.standard.string(forKey: "RootFolderPath") ?? "Not Selected")
         _batchSize = State(initialValue: Double(UserDefaults.standard.integer(forKey: "ImageBatchSize")))
+        let defaultCacheSize = UserDefaults.standard.integer(forKey: "MaxCacheSize")
+        _cacheSize = State(initialValue: Double(defaultCacheSize > 0 ? defaultCacheSize : 500))
     }
     
     var body: some View {
@@ -173,6 +176,42 @@ struct SettingsView: View {
                         }
                         
                         Text("Deletes all cached thumbnail images to free up space")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                        
+                        Label("Cache Size", systemImage: "memorychip")
+                            .font(.headline)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Slider(value: $cacheSize, in: 100...2000, step: 100) { _ in
+                                let intValue = Int(cacheSize)
+                                defaults.set(intValue, forKey: "MaxCacheSize")
+                                gridManager.updateMaxCacheSize(intValue)
+                            }
+                            
+                            HStack {
+                                Text("100")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text("\(Int(cacheSize)) thumbnails")
+                                    .font(.subheadline)
+                                    .foregroundColor(.accentColor)
+                                
+                                Spacer()
+                                
+                                Text("2000")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Text("Number of thumbnails to keep in memory")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }

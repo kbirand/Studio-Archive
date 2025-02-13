@@ -16,9 +16,14 @@ class GridManager: ObservableObject, @unchecked Sendable {
     private let cacheFolderName = "ImageCache"
     private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
     private var imageCache: [Int: NSImage] = [:]  // Separate image cache
-    private let maxCacheSize = 100 // Maximum number of images to keep in memory
     private var imageCacheQueue = DispatchQueue(label: "com.studiarchive.imagecache")
     private var imageAccessTimes: [Int: Date] = [:] // Track when each image was last accessed
+    
+    // Default to 500 items or user preference
+    private var maxCacheSize: Int {
+        let size = defaults.integer(forKey: "MaxCacheSize")
+        return size > 0 ? size : 500
+    }
     
     // Maximum possible batch size based on CPU cores
     private var maxBatchSize: Int {
@@ -55,6 +60,12 @@ class GridManager: ObservableObject, @unchecked Sendable {
         if defaults.float(forKey: "GridItemSize") == 0 {
             defaults.set(Float(200), forKey: "GridItemSize")
         }
+        
+        // Initialize max cache size if not set
+        if defaults.integer(forKey: "MaxCacheSize") == 0 {
+            defaults.set(500, forKey: "MaxCacheSize")
+        }
+        
         setupCacheDirectory()
     }
     
@@ -302,7 +313,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
                             if self.items.contains(where: { $0.id == result.id }),
                                let imageData = result.imageData,
                                let image = NSImage(data: imageData) {
-                                self.setImage(for: result.id, image: image)
+                                self.setImageInCache(id: result.id, image: image)
                             }
                         }
                         self.objectWillChange.send()
@@ -359,6 +370,90 @@ class GridManager: ObservableObject, @unchecked Sendable {
         }
     }
     
+    // Add method to update cache size
+    func updateMaxCacheSize(_ size: Int) {
+        defaults.set(size, forKey: "MaxCacheSize")
+        // If reducing cache size, trim cache to new size
+        if size < imageCache.count {
+            trimCache()
+        }
+    }
+    
+    // Add method to trim cache when it exceeds the limit
+    private func trimCache() {
+        imageCacheQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if self.imageCache.count > self.maxCacheSize {
+                // Sort by access time, oldest first
+                let sortedItems = self.imageAccessTimes.sorted { $0.value < $1.value }
+                
+                // Calculate how many items to remove
+                let itemsToRemove = self.imageCache.count - self.maxCacheSize
+                
+                // Remove oldest items
+                for i in 0..<itemsToRemove {
+                    let itemId = sortedItems[i].key
+                    self.imageCache.removeValue(forKey: itemId)
+                    self.imageAccessTimes.removeValue(forKey: itemId)
+                }
+                
+                LogManager.shared.log("Trimmed \(itemsToRemove) items from image cache", type: .debug)
+            }
+        }
+    }
+    
+    // Update getImage to use the new caching system
+    func getImage(for id: Int) -> NSImage? {
+        var image: NSImage?
+        
+        imageCacheQueue.sync {
+            image = imageCache[id]
+            if image != nil {
+                // Update access time
+                imageAccessTimes[id] = Date()
+            }
+        }
+        
+        return image
+    }
+    
+    // Update cache setting method
+    func setImageInCache(id: Int, image: NSImage) {
+        imageCacheQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.imageCache[id] = image
+            self.imageAccessTimes[id] = Date()
+            
+            // Trim cache if needed
+            if self.imageCache.count > self.maxCacheSize {
+                self.trimCache()
+            }
+        }
+    }
+    
+    // Add method to clear specific items from cache
+    func clearCacheForItems(_ ids: Set<Int>) {
+        imageCacheQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            for id in ids {
+                self.imageCache.removeValue(forKey: id)
+                self.imageAccessTimes.removeValue(forKey: id)
+            }
+        }
+    }
+    
+    // Add method to clear the cache
+    func clearCache() {
+        imageCacheQueue.sync {
+            imageCache.removeAll()
+            imageAccessTimes.removeAll()
+            LogManager.shared.log("Cleared image cache", type: .debug)
+        }
+    }
+    
     // Helper methods for image access
     private func cleanupCache() {
         imageCacheQueue.async { [weak self] in
@@ -381,35 +476,6 @@ class GridManager: ObservableObject, @unchecked Sendable {
             }
             
             LogManager.shared.log("Cleaned up \(itemsToRemove) items from image cache", type: .debug)
-        }
-    }
-    
-    func getImage(for itemId: Int) -> NSImage? {
-        imageCacheQueue.sync {
-            imageAccessTimes[itemId] = Date()
-        }
-        return imageCache[itemId]
-    }
-    
-    private func setImage(for itemId: Int, image: NSImage?) {
-        imageCacheQueue.sync {
-            if let image = image {
-                imageCache[itemId] = image
-                imageAccessTimes[itemId] = Date()
-                cleanupCache()
-            } else {
-                imageCache.removeValue(forKey: itemId)
-                imageAccessTimes.removeValue(forKey: itemId)
-            }
-        }
-    }
-    
-    // Add a method to clear the cache when switching works
-    func clearCache() {
-        imageCacheQueue.sync {
-            imageCache.removeAll()
-            imageAccessTimes.removeAll()
-            LogManager.shared.log("Cleared image cache", type: .debug)
         }
     }
     
