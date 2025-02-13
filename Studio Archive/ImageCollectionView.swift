@@ -525,32 +525,73 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     @objc private func deleteFile() {
         guard let gridItem = gridItem else { return }
         
-        let alert = NSAlert()
-        alert.messageText = "Delete Item"
-        alert.informativeText = "Are you sure you want to delete this item? This will remove it from the database but won't affect the original file."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            // Delete from database and refresh the view
-            let success = DatabaseManager.shared.deleteFile(id: gridItem.id)
-            if success {
-                // Notify GridManager to refresh
-                GridManager.shared.removeItem(id: gridItem.id)
+        // Get all selected items
+        if let collectionView = self.view.superview as? NSCollectionView,
+           collectionView.selectionIndexes.count > 1 {
+            // Multiple items selected
+            let alert = NSAlert()
+            alert.messageText = "Delete Multiple Items"
+            alert.informativeText = "Are you sure you want to delete \(collectionView.selectionIndexes.count) items? This will remove them from the database but won't affect the original files."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Delete")
+            alert.addButton(withTitle: "Cancel")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // Get all selected items
+                let selectedItems = collectionView.selectionIndexes.map { index in
+                    GridManager.shared.items[index]
+                }
                 
-                // Delete cache file if it exists
-                if let cachePath = gridItem.cachePath {
-                    do {
-                        try FileManager.default.removeItem(atPath: cachePath)
-                        LogManager.shared.log("Deleted cache file: \(cachePath)", type: .debug)
-                    } catch {
-                        LogManager.shared.log("Failed to delete cache file: \(error.localizedDescription)", type: .error)
+                // Delete all selected items
+                for item in selectedItems {
+                    let success = DatabaseManager.shared.deleteFile(id: item.id)
+                    if success {
+                        // Delete cache file if it exists
+                        if let cachePath = item.cachePath {
+                            do {
+                                try FileManager.default.removeItem(atPath: cachePath)
+                                LogManager.shared.log("Deleted cache file: \(cachePath)", type: .debug)
+                            } catch {
+                                LogManager.shared.log("Failed to delete cache file: \(error.localizedDescription)", type: .error)
+                            }
+                        }
+                        // Remove from GridManager
+                        GridManager.shared.removeItem(id: item.id)
+                    } else {
+                        LogManager.shared.log("Failed to delete item from database: \(item.id)", type: .error)
                     }
                 }
-            } else {
-                LogManager.shared.log("Failed to delete item from database", type: .error)
+            }
+        } else {
+            // Single item delete
+            let alert = NSAlert()
+            alert.messageText = "Delete Item"
+            alert.informativeText = "Are you sure you want to delete this item? This will remove it from the database but won't affect the original file."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Delete")
+            alert.addButton(withTitle: "Cancel")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // Delete from database and refresh the view
+                let success = DatabaseManager.shared.deleteFile(id: gridItem.id)
+                if success {
+                    // Notify GridManager to refresh
+                    GridManager.shared.removeItem(id: gridItem.id)
+                    
+                    // Delete cache file if it exists
+                    if let cachePath = gridItem.cachePath {
+                        do {
+                            try FileManager.default.removeItem(atPath: cachePath)
+                            LogManager.shared.log("Deleted cache file: \(cachePath)", type: .debug)
+                        } catch {
+                            LogManager.shared.log("Failed to delete cache file: \(error.localizedDescription)", type: .error)
+                        }
+                    }
+                } else {
+                    LogManager.shared.log("Failed to delete item from database", type: .error)
+                }
             }
         }
     }
