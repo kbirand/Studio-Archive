@@ -357,25 +357,39 @@ struct SettingsView: View {
                         Label("Work Visibility", systemImage: "eye")
                             .font(.headline)
                         
-                        Toggle("Show Visibility Checkboxes", isOn: Binding(
-                            get: { showVisibilityCheckboxes },
-                            set: { newValue in
-                                showVisibilityCheckboxes = newValue
-                                UserDefaults.standard.set(newValue, forKey: "ShowVisibilityCheckboxes")
-                                NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
-                            }
-                        ))
-                        .toggleStyle(.switch)
+                        HStack {
+                            Toggle("Show Visibility Checkboxes", isOn: Binding(
+                                get: { showVisibilityCheckboxes },
+                                set: { newValue in
+                                    showVisibilityCheckboxes = newValue
+                                    UserDefaults.standard.set(newValue, forKey: "ShowVisibilityCheckboxes")
+                                    NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                                }
+                            ))
+                            .toggleStyle(.switch)
+                            
+                            Spacer()
+                            Text("⌘H")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
                         
-                        Toggle("Hide Invisible Works", isOn: Binding(
-                            get: { hideInvisibleWorks },
-                            set: { newValue in
-                                hideInvisibleWorks = newValue
-                                UserDefaults.standard.set(newValue, forKey: "HideInvisibleWorks")
-                                NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
-                            }
-                        ))
-                        .toggleStyle(.switch)
+                        HStack {
+                            Toggle("Hide Invisible Works", isOn: Binding(
+                                get: { hideInvisibleWorks },
+                                set: { newValue in
+                                    hideInvisibleWorks = newValue
+                                    UserDefaults.standard.set(newValue, forKey: "HideInvisibleWorks")
+                                    NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                                }
+                            ))
+                            .toggleStyle(.switch)
+                            
+                            Spacer()
+                            Text("⇧⌘H")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
                     }
                     .padding(.vertical, 8)
                 } header: {

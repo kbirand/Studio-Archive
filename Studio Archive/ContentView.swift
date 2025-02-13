@@ -166,74 +166,114 @@ struct ContentView: View {
         }
     }
     
+    // Header view for the works list
+    private var worksHeaderView: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 16) {
+                HStack {
+                    Text("Works")
+                        .font(.system(size: 38, weight: .light))
+                    Button(action: {
+                        showAddWork = true
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 30, weight: .light))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding([.bottom], -10)
+            }
+            .frame(width: 300)
+            .padding([.leading], -128)
+            .padding([.bottom], 20)
+            Spacer()
+        }
+    }
+    
+    // Work list row view
+    private func workRowView(work: DatabaseManager.Work) -> some View {
+        HStack {
+            Text(work.workPeriod ?? "Unknown Work")
+                .font(.system(size: 16, weight: .light))
+                .tag(work.id)
+            Spacer()
+            if showVisibilityCheckboxes {
+                Image(systemName: work.visible ? "checkmark.square" : "square")
+                    .foregroundColor(.gray)
+                    .onTapGesture {
+                        toggleVisibility(for: work.id)
+                    }
+            }
+        }
+    }
+    
+    // Search field view
+    private var searchFieldView: some View {
+        HStack {
+            Spacer()
+            TextField("Search works...", text: $searchText)
+                .textFieldStyle(.plain)
+                .frame(width: 300)
+                .font(.system(size: 13))
+            Spacer()
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 16)
+    }
+    
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             VStack(alignment: .leading) {
                 VStack {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 16) {
-                            HStack {
-                                Text("Works")
-                                    .font(.system(size: 38, weight: .light))
-                                Button(action: {
-                                    showAddWork = true
-                                }) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 30, weight: .light))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding([.bottom], -10)
-                        }
-                        .frame(width: 300)
-                        .padding([.leading], -128)
-                        .padding([.bottom], 20)
-                        Spacer()
-                    }
-                }
-                
-                VStack(spacing: 0) {
-                    HStack {
-                        Spacer()
-                        List(filteredWorks, id: \.id, selection: $selectedWorkId) { work in
-                            HStack {
-                                Text(work.workPeriod ?? "Unknown Work")
-                                    .font(.system(size: 16, weight: .light))
-                                    .tag(work.id)
-                                Spacer()
-                                if showVisibilityCheckboxes {
-                                    Image(systemName: work.visible ? "checkmark.square" : "square")
-                                        .foregroundColor(.gray)
-                                        .onTapGesture {
-                                            toggleVisibility(for: work.id)
-                                        }
-                                }
-                            }
-                        }
-                        .frame(width: 300)
-                        .listStyle(.sidebar)
-                        Spacer()
-                    }
+                    worksHeaderView
                     
-                    HStack {
-                        Spacer()
-                        TextField("Search works...", text: $searchText)
-                            .textFieldStyle(.plain)
-                            .padding(8)
-                            .frame(width: 270, height: 32)
-                            .background(Color(.darkGray))
-                            .cornerRadius(6)
-                        Spacer()
+                    VStack(spacing: 0) {
+                        HStack {
+                            Spacer()
+                            List(filteredWorks, id: \.id, selection: $selectedWorkId) { work in
+                                workRowView(work: work)
+                            }
+                            .frame(width: 300)
+                            .listStyle(.sidebar)
+                            Spacer()
+                        }
+                        
+                        searchFieldView
                     }
-                    .padding(.top, 10)
                 }
             }
             .padding([.top,.bottom],50)
             .navigationSplitViewColumnWidth(min: 300, ideal: 300)
             .toolbar {
-                ToolbarItem(id: "SidebarToggle", placement: .navigation, showsByDefault: false) {
-                    EmptyView()
+                ToolbarItem(placement: .automatic) {
+                    Button(action: {
+                        showSettings = true
+                    }) {
+                        Image(systemName: "gear")
+                    }
+                }
+                
+                ToolbarItem(placement: .automatic) {
+                    Button(action: {
+                        showVisibilityCheckboxes.toggle()
+                        UserDefaults.standard.set(showVisibilityCheckboxes, forKey: "ShowVisibilityCheckboxes")
+                        NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                    }) {
+                        EmptyView()
+                    }
+                    .keyboardShortcut("h", modifiers: .command)
+                }
+                
+                ToolbarItem(placement: .automatic) {
+                    Button(action: {
+                        hideInvisibleWorks.toggle()
+                        UserDefaults.standard.set(hideInvisibleWorks, forKey: "HideInvisibleWorks")
+                        NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                    }) {
+                        EmptyView()
+                    }
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
                 }
             }
         } detail: {
