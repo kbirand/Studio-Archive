@@ -87,26 +87,15 @@ class DatabaseManager: ObservableObject {
             sourceURL.stopAccessingSecurityScopedResource()
         }
         
-        let fileName = sourceURL.lastPathComponent
-        let destinationURL = documentsDirectory.appendingPathComponent(fileName)
+        // Use the database in its original location
+        let databasePath = sourceURL.path
         
-        do {
-            // Remove existing file if it exists
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-            
-            // Copy the database file to documents directory
-            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-            logManager.log("Successfully copied database to: \(destinationURL.path)", type: .info)
-            
-            // Open the copied database
-            openDatabase(at: destinationURL.path)
-        } catch {
-            logManager.log("Error copying database: \(error)", type: .error)
-            errorMessage = "Failed to copy database: \(error.localizedDescription)"
-            showError = true
-        }
+        // Save the path for future use
+        defaults.set(databasePath, forKey: databasePathKey)
+        
+        // Open the database at its original location
+        openDatabase(at: databasePath)
+        logManager.log("Using database at original location: \(databasePath)", type: .info)
     }
     
     private func closeDatabase() {
