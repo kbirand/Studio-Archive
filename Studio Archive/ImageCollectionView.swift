@@ -135,6 +135,8 @@ struct ImageCollectionView: NSViewRepresentable {
         private var quickLookIndex: Int = -1
         private var selectedItem: GridManager.GridItem?
         private var previewItem: PreviewItem?
+        private var lastValidatedIndices: [Int] = []
+        private var lastValidatedIndex: Int = -1
         
         init(_ parent: ImageCollectionView) {
             self.parent = parent
@@ -245,57 +247,129 @@ struct ImageCollectionView: NSViewRepresentable {
         }
         
         func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
+            guard indexPath.item < parent.gridManager.items.count else {
+                LogManager.shared.log("pasteboardWriter: Invalid index: \(indexPath.item)", type: .error)
+                return nil
+            }
+            
             let gridItem = parent.gridManager.items[indexPath.item]
             
             // Create a pasteboard item that can contain multiple representations
             let pasteboardItem = NSPasteboardItem()
             
-            // Add the index for internal reordering
-            pasteboardItem.setString(String(indexPath.item), forType: .string)
+            // If we have multiple items selected, include all selected indices
+            if collectionView.selectionIndexPaths.count > 1 && collectionView.selectionIndexPaths.contains(indexPath) {
+                // Filter and validate selected indices, ensuring uniqueness
+                let selectedIndices = Array(Set(collectionView.selectionIndexPaths
+                    .map { $0.item }
+                    .filter { $0 < parent.gridManager.items.count }))
+                    .sorted()
+                
+                if selectedIndices.isEmpty {
+                    LogManager.shared.log("pasteboardWriter: No valid selected indices", type: .error)
+                    return nil
+                }
+                
+                // Store the indices in the pasteboard
+                let indicesString = selectedIndices.map(String.init).joined(separator: ",")
+                LogManager.shared.log("pasteboardWriter: Multiple selection with indices: \(selectedIndices)", type: .debug)
+                pasteboardItem.setString(indicesString, forType: .string)
+            } else {
+                // Single item drag
+                pasteboardItem.setString(String(indexPath.item), forType: .string)
+            }
             
             // Add the file URL for Finder operations
             let fileURL = URL(fileURLWithPath: gridItem.originalPath)
-            
             pasteboardItem.setString(fileURL.absoluteString, forType: .fileURL)
             
             return pasteboardItem
         }
         
         func collectionView(_ collectionView: NSCollectionView, validateDrop draggingInfo: NSDraggingInfo, proposedIndexPath proposedDropIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>, dropOperation proposedDropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
-            // If dragging to Finder or external target
-            if let source = draggingInfo.draggingSource as? NSCollectionView,
-               source === collectionView {
-                // For internal reordering
-                proposedDropOperation.pointee = .on
-                return .move
+            // Only process if this is an internal move
+            guard draggingInfo.draggingSource as? NSCollectionView === collectionView,
+                  let draggedString = draggingInfo.draggingPasteboard.string(forType: .string) else {
+                return []
             }
             
-            // For external drags (like to Finder)
-            return .copy
+            // Parse and deduplicate the dragged indices
+            let draggedIndices = Array(Set(draggedString.split(separator: ",").compactMap { Int($0) })).sorted()
+            
+            guard !draggedIndices.isEmpty else {
+                LogManager.shared.log("validateDrop: No valid indices found in pasteboard", type: .error)
+                return []
+            }
+            
+            // Get the proposed drop index
+            let proposedIndex = proposedDropIndexPath.pointee.item
+            
+            // Validate that we're not dropping an item onto itself or in between selected items
+            if draggedIndices.count == 1 {
+                if draggedIndices[0] == proposedIndex {
+                    return []
+                }
+            } else {
+                // For multiple items, check if the drop target is within the range of selected items
+                let minIndex = draggedIndices[0]
+                let maxIndex = draggedIndices.last!
+                
+                if proposedIndex > minIndex && proposedIndex <= maxIndex {
+                    // Trying to drop between selected items - not allowed
+                    return []
+                }
+            }
+            
+            // Set the drop operation to before
+            proposedDropOperation.pointee = .before
+            
+            // Log the validation less frequently
+            if draggedIndices != lastValidatedIndices || proposedIndex != lastValidatedIndex {
+                LogManager.shared.log("validateDrop: Valid drop at index \(proposedIndex) for indices \(draggedIndices)", type: .debug)
+                lastValidatedIndices = draggedIndices
+                lastValidatedIndex = proposedIndex
+            }
+            
+            return .move
         }
         
         func collectionView(_ collectionView: NSCollectionView, acceptDrop draggingInfo: NSDraggingInfo, indexPath: IndexPath, dropOperation: NSCollectionView.DropOperation) -> Bool {
-            LogManager.shared.log("Accepting drop at index \(indexPath.item)", type: .debug)
-            
-            // Check if this is an internal move
-            if let draggedItem = draggingInfo.draggingPasteboard.string(forType: .string),
-               let fromIndex = Int(draggedItem) {
-                let toIndex = indexPath.item
-                parent.gridManager.updateOrder(fromIndex: fromIndex, toIndex: toIndex)
-                
-                // Animate the reordering
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.3
-                    context.allowsImplicitAnimation = true
-                    collectionView.animator().performBatchUpdates({
-                        collectionView.moveItem(at: IndexPath(item: fromIndex, section: 0),
-                                             to: IndexPath(item: toIndex, section: 0))
-                    }, completionHandler: nil)
-                }
-                return true
+            guard let draggedString = draggingInfo.draggingPasteboard.string(forType: .string) else {
+                LogManager.shared.log("acceptDrop: No string data in pasteboard", type: .error)
+                return false
             }
             
-            return false
+            // Parse and deduplicate the dragged indices
+            let draggedIndices = Array(Set(draggedString.split(separator: ",").compactMap { Int($0) })).sorted()
+            guard !draggedIndices.isEmpty else {
+                LogManager.shared.log("acceptDrop: No valid indices found in pasteboard", type: .error)
+                return false
+            }
+            
+            let targetIndex = indexPath.item
+            
+            // Create move operations for each dragged index
+            var moves: [(from: Int, to: Int)] = []
+            
+            // Calculate the target indices based on whether we're moving up or down
+            let isMovingUp = targetIndex < draggedIndices[0]
+            let adjustedTargetIndex = isMovingUp ? targetIndex : targetIndex - draggedIndices.count
+            
+            // Create moves for each dragged index
+            for (offset, sourceIndex) in draggedIndices.enumerated() {
+                let adjustedIndex = adjustedTargetIndex + offset
+                moves.append((from: sourceIndex, to: adjustedIndex))
+            }
+            
+            // Log the move operations
+            LogManager.shared.log("acceptDrop: Moving items from \(draggedIndices) to positions starting at \(adjustedTargetIndex)", type: .debug)
+            
+            // Update the grid manager with the new order
+            Task { @MainActor in
+                parent.gridManager.updateOrderMultiple(moves: moves)
+            }
+            
+            return true
         }
     }
 }

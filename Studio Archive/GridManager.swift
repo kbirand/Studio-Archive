@@ -463,6 +463,101 @@ class GridManager: ObservableObject, @unchecked Sendable {
         objectWillChange.send()
     }
     
+    func updateOrderMultiple(moves: [(from: Int, to: Int)]) {
+        LogManager.shared.log("updateOrderMultiple: Starting with moves: \(moves)", type: .debug)
+        
+        // Validate moves and check for duplicates
+        var seenFromIndices = Set<Int>()
+        var seenToIndices = Set<Int>()
+        
+        for move in moves {
+            if seenFromIndices.contains(move.from) {
+                LogManager.shared.log("updateOrderMultiple: Duplicate from index: \(move.from)", type: .error)
+                return
+            }
+            if seenToIndices.contains(move.to) {
+                LogManager.shared.log("updateOrderMultiple: Duplicate to index: \(move.to)", type: .error)
+                return
+            }
+            seenFromIndices.insert(move.from)
+            seenToIndices.insert(move.to)
+        }
+        
+        // Create a copy of the items array
+        var newItems = items
+        
+        // First remove all items that are being moved (from highest index to lowest)
+        var movingItems: [GridItem] = []
+        let sortedMoves = moves.sorted { $0.from > $1.from }
+        
+        for move in sortedMoves {
+            guard move.from < newItems.count else {
+                LogManager.shared.log("updateOrderMultiple: Index out of range during removal: \(move.from)", type: .error)
+                return
+            }
+            movingItems.append(newItems.remove(at: move.from))
+        }
+        
+        // Then insert them at their new positions (from lowest to highest)
+        // Reverse both arrays to maintain the original relative order of items
+        movingItems.reverse()
+        for (item, move) in zip(movingItems, moves.sorted { $0.to < $1.to }) {
+            let targetIndex = min(move.to, newItems.count)
+            newItems.insert(item, at: targetIndex)
+        }
+        
+        // Verify the new array has the correct count
+        guard newItems.count == items.count else {
+            LogManager.shared.log("updateOrderMultiple: Item count mismatch after reordering. Expected: \(items.count), Got: \(newItems.count)", type: .error)
+            return
+        }
+        
+        // Update the items array
+        items = newItems
+        
+        // Update database order
+        var updatedItems: [(Int, GridItem)] = []
+        for (index, item) in items.enumerated() {
+            let newOrder = items.count - index // Reverse the order to match DESC in SQL
+            if item.order != newOrder {
+                let newItem = GridItem(
+                    id: item.id,
+                    originalPath: item.originalPath,
+                    cachePath: item.cachePath,
+                    order: newOrder
+                )
+                updatedItems.append((index, newItem))
+            }
+        }
+        
+        LogManager.shared.log("updateOrderMultiple: Updating \(updatedItems.count) items in database", type: .debug)
+        
+        // Batch update database
+        Task {
+            for (index, newItem) in updatedItems {
+                do {
+                    let itemId = newItem.id
+                    let newOrder = newItem.order
+                    if try await DatabaseManager.shared.updateFileOrder(fileId: itemId, newOrder: newOrder) {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self = self else { return }
+                            guard index < self.items.count else {
+                                LogManager.shared.log("updateOrderMultiple: Index out of range during database update: \(index)", type: .error)
+                                return
+                            }
+                            self.items[index] = newItem
+                        }
+                    }
+                } catch {
+                    LogManager.shared.log("Failed to update order for item \(newItem.id): \(error)", type: .error)
+                }
+            }
+        }
+        
+        // Notify UI of the reorder
+        objectWillChange.send()
+    }
+    
     private var cacheDirPath: String? {
         return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(cacheFolderName)
