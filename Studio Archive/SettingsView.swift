@@ -15,6 +15,8 @@ struct SettingsView: View {
     @State private var batchSize: Double
     @State private var showLogsFinder = false
     @State private var cacheSize: Double
+    @State private var showVisibilityCheckboxes: Bool
+    @State private var hideInvisibleWorks: Bool
     
     private let defaults = UserDefaults.standard
     private let logManager = LogManager.shared
@@ -30,6 +32,8 @@ struct SettingsView: View {
         _batchSize = State(initialValue: Double(UserDefaults.standard.integer(forKey: "ImageBatchSize")))
         let defaultCacheSize = UserDefaults.standard.integer(forKey: "MaxCacheSize")
         _cacheSize = State(initialValue: Double(defaultCacheSize > 0 ? defaultCacheSize : 500))
+        _showVisibilityCheckboxes = State(initialValue: UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes"))
+        _hideInvisibleWorks = State(initialValue: UserDefaults.standard.bool(forKey: "HideInvisibleWorks"))
     }
     
     var body: some View {
@@ -343,6 +347,39 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Logs")
+                        .textCase(.uppercase)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Work Visibility", systemImage: "eye")
+                            .font(.headline)
+                        
+                        Toggle("Show Visibility Checkboxes", isOn: Binding(
+                            get: { showVisibilityCheckboxes },
+                            set: { newValue in
+                                showVisibilityCheckboxes = newValue
+                                UserDefaults.standard.set(newValue, forKey: "ShowVisibilityCheckboxes")
+                                NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        
+                        Toggle("Hide Invisible Works", isOn: Binding(
+                            get: { hideInvisibleWorks },
+                            set: { newValue in
+                                hideInvisibleWorks = newValue
+                                UserDefaults.standard.set(newValue, forKey: "HideInvisibleWorks")
+                                NotificationCenter.default.post(name: Notification.Name("VisibilitySettingsChanged"), object: nil)
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Visibility")
                         .textCase(.uppercase)
                         .font(.caption)
                         .foregroundColor(.secondary)

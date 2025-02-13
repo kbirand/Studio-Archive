@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var showAddPhotosDialog = false
     @State private var showDeleteAlert = false
+    @State private var showVisibilityCheckboxes = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+    @State private var hideInvisibleWorks = UserDefaults.standard.bool(forKey: "HideInvisibleWorks")
     
     // Editing states
     @State private var editedWorkPeriod: String = ""
@@ -145,10 +147,14 @@ struct ContentView: View {
     }
     
     var filteredWorks: [DatabaseManager.Work] {
+        var filtered = works
+        if hideInvisibleWorks {
+            filtered = filtered.filter { $0.visible }
+        }
         if searchText.isEmpty {
-            return works
+            return filtered
         } else {
-            return works.filter { work in
+            return filtered.filter { work in
                 (work.workPeriod ?? "").localizedCaseInsensitiveContains(searchText) ||
                 (work.stylist ?? "").localizedCaseInsensitiveContains(searchText) ||
                 (work.hair ?? "").localizedCaseInsensitiveContains(searchText) ||
@@ -194,11 +200,13 @@ struct ContentView: View {
                                     .font(.system(size: 16, weight: .light))
                                     .tag(work.id)
                                 Spacer()
-                                Image(systemName: work.visible ? "checkmark.square" : "square")
-                                    .foregroundColor(.gray)
-                                    .onTapGesture {
-                                        toggleVisibility(for: work.id)
-                                    }
+                                if showVisibilityCheckboxes {
+                                    Image(systemName: work.visible ? "checkmark.square" : "square")
+                                        .foregroundColor(.gray)
+                                        .onTapGesture {
+                                            toggleVisibility(for: work.id)
+                                        }
+                                }
                             }
                         }
                         .frame(width: 300)
@@ -412,6 +420,17 @@ struct ContentView: View {
                         item.view?.isHidden = true
                     }
                 }
+            }
+            
+            // Add observer for visibility settings changes
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("VisibilitySettingsChanged"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                showVisibilityCheckboxes = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+                hideInvisibleWorks = UserDefaults.standard.bool(forKey: "HideInvisibleWorks")
+                works = databaseManager.fetchWorks()
             }
         }
         .onChange(of: databaseManager.isDatabaseSelected) { _, isSelected in
