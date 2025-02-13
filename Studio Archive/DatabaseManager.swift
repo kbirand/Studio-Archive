@@ -287,6 +287,34 @@ class DatabaseManager: ObservableObject {
         return result
     }
     
+    func updateOrder(id: Int, order: Int) -> Bool {
+        guard let db = db else {
+            logManager.log("Database connection is not initialized", type: .error)
+            return false
+        }
+        
+        var statement: OpaquePointer?
+        let query = "UPDATE files SET ordered = ? WHERE id = ?"
+        
+        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
+            logManager.log("Failed to prepare update order statement: \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            return false
+        }
+        
+        defer { sqlite3_finalize(statement) }
+        
+        sqlite3_bind_int(statement, 1, Int32(order))
+        sqlite3_bind_int(statement, 2, Int32(id))
+        
+        if sqlite3_step(statement) != SQLITE_DONE {
+            logManager.log("Failed to update order for file id \(id): \(String(cString: sqlite3_errmsg(db)))", type: .error)
+            return false
+        }
+        
+        logManager.log("Successfully updated order for file id \(id) to \(order)", type: .debug)
+        return true
+    }
+    
     func updateFileOrder(fileId: Int, newOrder: Int) async throws -> Bool {
         guard let db = db else {
             throw DatabaseError.notInitialized

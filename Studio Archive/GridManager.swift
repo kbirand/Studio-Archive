@@ -420,10 +420,15 @@ class GridManager: ObservableObject, @unchecked Sendable {
     
     // Update cache setting method
     func setImageInCache(id: Int, image: NSImage) {
-        imageCacheQueue.async { [weak self] in
-            guard let self = self else { return }
+        // Get image data outside the async context
+        guard let imageData = image.tiffRepresentation else { return }
+        
+        // Pass only the Data (which is Sendable) through the async boundary
+        imageCacheQueue.async { [weak self, imageData] in
+            guard let self = self,
+                  let imageCopy = NSImage(data: imageData) else { return }
             
-            self.imageCache[id] = image
+            self.imageCache[id] = imageCopy
             self.imageAccessTimes[id] = Date()
             
             // Trim cache if needed
@@ -622,6 +627,33 @@ class GridManager: ObservableObject, @unchecked Sendable {
         
         // Notify UI of the reorder
         objectWillChange.send()
+    }
+    
+    func resetItemsOrder() {
+        // Sort items by filename
+        let sortedItems = items.sorted { item1, item2 in
+            let filename1 = (item1.originalPath as NSString).lastPathComponent
+            let filename2 = (item2.originalPath as NSString).lastPathComponent
+            return filename1.localizedStandardCompare(filename2) == .orderedAscending
+        }
+        
+        // Update order in database and memory
+        for (index, item) in sortedItems.enumerated() {
+            if DatabaseManager.shared.updateOrder(id: item.id, order: sortedItems.count - index) {
+                if let itemIndex = items.firstIndex(where: { $0.id == item.id }) {
+                    items[itemIndex].order = sortedItems.count - index
+                }
+            } else {
+                LogManager.shared.log("Failed to update order for item \(item.id)", type: .error)
+            }
+        }
+        
+        // Resort items array
+        items.sort { $0.order > $1.order }
+        
+        // Notify observers
+        objectWillChange.send()
+        LogManager.shared.log("Reset items order by filename", type: .debug)
     }
     
     private var cacheDirPath: String? {

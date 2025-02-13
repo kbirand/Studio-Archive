@@ -378,10 +378,34 @@ struct ImageCollectionView: NSViewRepresentable {
 struct ImageCollectionViewWithDialog: View {
     @ObservedObject var gridManager: GridManager
     let onSelectionChanged: (Set<Int>) -> Void
+    @State private var showResetOrderAlert = false
     
     var body: some View {
         ZStack {
-            ImageCollectionView(gridManager: gridManager, onSelectionChanged: onSelectionChanged)
+            VStack {
+                ImageCollectionView(gridManager: gridManager, onSelectionChanged: onSelectionChanged)
+                
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        showResetOrderAlert = true
+                    }) {
+                        Label("Reset Order", systemImage: "arrow.clockwise")
+                            .foregroundColor(.red.opacity(0.45))
+                    }
+                    .buttonStyle(.borderless)
+                    .alert("Reset Items Order", isPresented: $showResetOrderAlert) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Reset", role: .destructive) {
+                            gridManager.resetItemsOrder()
+                        }
+                    } message: {
+                        Text("This will reset the order of all items to be sorted by filename in ascending order. This action cannot be undone.")
+                    }
+                    .padding([.trailing, .bottom], 16)
+                }
+            }
+            
             DeleteConfirmationDialog()
         }
     }
