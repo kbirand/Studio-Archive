@@ -52,6 +52,12 @@ class GridManager: ObservableObject, @unchecked Sendable {
     
     @Published var items: [GridItem] = []
     
+    // Filtered items based on visibility setting
+    var filteredItems: [GridItem] {
+        let hideInvisible = defaults.bool(forKey: "HideInvisibleWorks")
+        return hideInvisible ? items.filter { $0.visible } : items
+    }
+    
     private struct BatchResult: Sendable {
         let id: Int
         let imageData: Data?

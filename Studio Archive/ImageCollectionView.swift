@@ -46,7 +46,16 @@ struct ImageCollectionView: NSViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        let coordinator = Coordinator(self)
+        NotificationCenter.default.addObserver(forName: Notification.Name("VisibilitySettingsChanged"), object: nil, queue: .main) { [weak coordinator] _ in
+            guard let coordinator = coordinator else { return }
+            coordinator.parent.gridManager.objectWillChange.send()
+            if let scrollView = coordinator.scrollView,
+               let collectionView = scrollView.documentView as? NSCollectionView {
+                collectionView.reloadData()
+            }
+        }
+        return coordinator
     }
     
     func makeNSView(context: Context) -> NSScrollView {
@@ -76,6 +85,8 @@ struct ImageCollectionView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = false
         
+        context.coordinator.scrollView = scrollView
+        
         return scrollView
     }
     
@@ -94,8 +105,8 @@ struct ImageCollectionView: NSViewRepresentable {
         }
         
         // Reload data when items change
-        if context.coordinator.lastItemCount != gridManager.items.count {
-            context.coordinator.lastItemCount = gridManager.items.count
+        if context.coordinator.lastItemCount != gridManager.filteredItems.count {
+            context.coordinator.lastItemCount = gridManager.filteredItems.count
             
             DispatchQueue.main.async {
                 // Save scroll position
@@ -112,7 +123,7 @@ struct ImageCollectionView: NSViewRepresentable {
             collectionView.visibleItems().forEach { item in
                 if let indexPath = collectionView.indexPath(for: item),
                    let imageItem = item as? ImageCollectionViewItem {
-                    let gridItem = gridManager.items[indexPath.item]
+                    let gridItem = gridManager.filteredItems[indexPath.item]
                     imageItem.configure(with: gridItem)
                 }
             }
@@ -135,6 +146,7 @@ struct ImageCollectionView: NSViewRepresentable {
         private var quickLookIndex: Int = -1
         private var selectedItem: GridManager.GridItem?
         private var previewItem: PreviewItem?
+        weak var scrollView: NSScrollView?
         private var lastValidatedIndices: [Int] = []
         private var lastValidatedIndex: Int = -1
         
@@ -148,8 +160,8 @@ struct ImageCollectionView: NSViewRepresentable {
             let indexes = indexPaths.map { $0.item }
             parent.onSelectionChanged(Set(indexes))
             if let firstIndex = indexes.first,
-               firstIndex < parent.gridManager.items.count {
-                selectedItem = parent.gridManager.items[firstIndex]
+               firstIndex < parent.gridManager.filteredItems.count {
+                selectedItem = parent.gridManager.filteredItems[firstIndex]
                 quickLookIndex = firstIndex
                 // Clear cached preview item when selection changes
                 previewItem = nil
@@ -169,11 +181,11 @@ struct ImageCollectionView: NSViewRepresentable {
         // MARK: - QuickLook Panel Support
         
         func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
-            return parent.gridManager.items.count
+            return parent.gridManager.filteredItems.count
         }
         
         func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-            let item = parent.gridManager.items[index]
+            let item = parent.gridManager.filteredItems[index]
             let fullPath = item.originalPath
             
             guard FileManager.default.fileExists(atPath: fullPath),
@@ -227,7 +239,7 @@ struct ImageCollectionView: NSViewRepresentable {
         // MARK: - Collection View Delegate
         
         func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
-            let count = parent.gridManager.items.count
+            let count = parent.gridManager.filteredItems.count
             //LogManager.shared.log("CollectionView: Number of items = \(count)", type: .debug)
             return count
         }
@@ -236,7 +248,7 @@ struct ImageCollectionView: NSViewRepresentable {
             //LogManager.shared.log("CollectionView: Creating item at index \(indexPath.item)", type: .debug)
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("ImageCell"),
                                              for: indexPath) as! ImageCollectionViewItem
-            let gridItem = parent.gridManager.items[indexPath.item]
+            let gridItem = parent.gridManager.filteredItems[indexPath.item]
             item.configure(with: gridItem)
             return item
         }
@@ -247,12 +259,12 @@ struct ImageCollectionView: NSViewRepresentable {
         }
         
         func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
-            guard indexPath.item < parent.gridManager.items.count else {
+            guard indexPath.item < parent.gridManager.filteredItems.count else {
                 LogManager.shared.log("pasteboardWriter: Invalid index: \(indexPath.item)", type: .error)
                 return nil
             }
             
-            let gridItem = parent.gridManager.items[indexPath.item]
+            let gridItem = parent.gridManager.filteredItems[indexPath.item]
             
             // Create a pasteboard item that can contain multiple representations
             let pasteboardItem = NSPasteboardItem()
@@ -262,7 +274,7 @@ struct ImageCollectionView: NSViewRepresentable {
                 // Filter and validate selected indices, ensuring uniqueness
                 let selectedIndices = Array(Set(collectionView.selectionIndexPaths
                     .map { $0.item }
-                    .filter { $0 < parent.gridManager.items.count }))
+                    .filter { $0 < parent.gridManager.filteredItems.count }))
                     .sorted()
                 
                 if selectedIndices.isEmpty {
