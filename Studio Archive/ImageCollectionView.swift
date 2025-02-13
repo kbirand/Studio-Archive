@@ -419,8 +419,8 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     private var progressIndicator: NSProgressIndicator?
     private var filenameLabel: NSTextField?
     private var filenameBgView: NSView?
-    private var visibilityCheckbox: NSButton?
     private var gridItem: GridManager.GridItem?
+    private var visibilityCheckbox: NSButton?
     
     override func loadView() {
         let containerView = NSView()
@@ -528,8 +528,9 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
         
         // Update visibility checkbox state
         visibilityCheckbox?.state = item.visible ? .on : .off
-        visibilityCheckbox?.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
-        visibilityCheckbox?.isHidden = !UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        let showCheckboxes = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        visibilityCheckbox?.isEnabled = showCheckboxes
+        visibilityCheckbox?.isHidden = !showCheckboxes
         
         // Configure filename label if showing filenames
         if GridManager.shared.showFilenames {
@@ -645,7 +646,9 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     private func setupVisibilityCheckbox() {
         let checkbox = NSButton(checkboxWithTitle: "", target: self, action: #selector(toggleVisibility))
         checkbox.state = .off
-        checkbox.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        let showCheckboxes = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
+        checkbox.isEnabled = showCheckboxes
+        checkbox.isHidden = !showCheckboxes
         containerView?.addSubview(checkbox)
         
         checkbox.translatesAutoresizingMaskIntoConstraints = false
@@ -661,17 +664,17 @@ class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
         // Listen for visibility settings changes
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(visibilitySettingsChanged),
+            selector: #selector(handleVisibilitySettingsChanged),
             name: Notification.Name("VisibilitySettingsChanged"),
             object: nil
         )
     }
     
-    @objc private func visibilitySettingsChanged() {
+    @objc private func handleVisibilitySettingsChanged() {
+        // Update checkbox enabled state based on UserDefaults
         visibilityCheckbox?.isEnabled = UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
-        if let item = gridItem {
-            visibilityCheckbox?.state = item.visible ? .on : .off
-        }
+        // Update checkbox visibility
+        visibilityCheckbox?.isHidden = !UserDefaults.standard.bool(forKey: "ShowVisibilityCheckboxes")
     }
     
     @objc private func toggleVisibility() {
