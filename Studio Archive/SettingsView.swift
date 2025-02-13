@@ -175,9 +175,23 @@ struct SettingsView: View {
                             }
                         }
                         
-                        Text("Deletes all cached thumbnail images to free up space")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Cache Directory")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Button("Change") {
+                                    selectCacheDirectory()
+                                }
+                                .foregroundColor(.accentColor)
+                            }
+                            
+                            Text(gridManager.getCurrentCachePath())
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                         
                         Divider()
                             .padding(.vertical, 8)
@@ -394,6 +408,22 @@ struct SettingsView: View {
                 } catch {
                     print("❌ Failed to create bookmark: \(error)")
                 }
+            }
+        }
+    }
+    
+    private func selectCacheDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.title = "Select Cache Directory"
+        panel.message = "Choose a directory for storing image cache"
+        
+        if panel.runModal() == .OK {
+            if let url = panel.url {
+                gridManager.setCacheDirPath(url.path)
             }
         }
     }

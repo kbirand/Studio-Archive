@@ -14,6 +14,7 @@ class GridManager: ObservableObject, @unchecked Sendable {
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
     private let cacheFolderName = "ImageCache"
+    private let cacheDirPathKey = "ImageCachePath"
     private let maxThumbnailSize: CGFloat = 512  // Maximum dimension for cached thumbnails
     private var imageCache: [Int: NSImage] = [:]  // Separate image cache
     private var imageCacheQueue = DispatchQueue(label: "com.studiarchive.imagecache")
@@ -98,16 +99,15 @@ class GridManager: ObservableObject, @unchecked Sendable {
     }
     
     func loadImages(forWorkPath workPath: String, files: [(id: Int, path: String, order: Int)]) {
-        // Clear existing items and cache before checking for duplicates
+        // Clear existing items before checking for duplicates
         items.removeAll()
-        clearCache()
         
         // Check if we're already loading these exact same files
         let newFileIds = Set(files.map { $0.id })
         let currentFileIds = Set(items.map { $0.id })
         
         if newFileIds == currentFileIds && !items.isEmpty {
-            LogManager.shared.log("GridManager: Skipping load as these files are already loaded", type: .debug)
+            LogManager.shared.log("Same files already loaded, skipping", type: .debug)
             return
         }
         
@@ -403,7 +403,6 @@ class GridManager: ObservableObject, @unchecked Sendable {
         }
     }
     
-    // Update getImage to use the new caching system
     func getImage(for id: Int) -> NSImage? {
         var image: NSImage?
         
@@ -452,10 +451,64 @@ class GridManager: ObservableObject, @unchecked Sendable {
     
     // Add method to clear the cache
     func clearCache() {
-        imageCacheQueue.sync {
-            imageCache.removeAll()
-            imageAccessTimes.removeAll()
-            LogManager.shared.log("Cleared image cache", type: .debug)
+        guard let cachePath = getCacheDirectoryPath() else {
+            LogManager.shared.log("Cache directory path is nil", type: .error)
+            return
+        }
+        
+        do {
+            if fileManager.fileExists(atPath: cachePath) {
+                try fileManager.removeItem(atPath: cachePath)
+                try fileManager.createDirectory(atPath: cachePath, withIntermediateDirectories: true)
+                LogManager.shared.log("Cache cleared successfully", type: .info)
+            }
+            
+            // Clear memory cache
+            imageCacheQueue.async { [weak self] in
+                self?.imageCache.removeAll()
+                self?.imageAccessTimes.removeAll()
+            }
+            
+            // Notify observers
+            objectWillChange.send()
+        } catch {
+            LogManager.shared.log("Failed to clear cache: \(error)", type: .error)
+        }
+    }
+    
+    private func getCacheDirectoryPath() -> String? {
+        // Try to get custom path from UserDefaults
+        if let customPath = defaults.string(forKey: cacheDirPathKey),
+           fileManager.fileExists(atPath: customPath) {
+            return customPath
+        }
+        
+        // Use/create default path under Documents
+        return fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(cacheFolderName)
+            .path
+    }
+    
+    func getCurrentCachePath() -> String {
+        return getCacheDirectoryPath() ?? ""
+    }
+    
+    func setCacheDirPath(_ path: String) {
+        do {
+            // Create directory if it doesn't exist
+            if !fileManager.fileExists(atPath: path) {
+                try fileManager.createDirectory(atPath: path, withIntermediateDirectories: true)
+                LogManager.shared.log("Created new cache directory at: \(path)", type: .info)
+            }
+            
+            // Save new path
+            defaults.set(path, forKey: cacheDirPathKey)
+            LogManager.shared.log("Updated cache directory to: \(path)", type: .info)
+            
+            // Notify observers
+            objectWillChange.send()
+        } catch {
+            LogManager.shared.log("Failed to set cache directory: \(error)", type: .error)
         }
     }
     
@@ -654,18 +707,6 @@ class GridManager: ObservableObject, @unchecked Sendable {
         // Notify observers
         objectWillChange.send()
         LogManager.shared.log("Reset items order by filename", type: .debug)
-    }
-    
-    private var cacheDirPath: String? {
-        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(cacheFolderName)
-            .path
-    }
-    
-    private func getCacheDirectoryPath() -> String? {
-        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(cacheFolderName)
-            .path
     }
     
     func deleteCache() {

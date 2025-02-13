@@ -351,8 +351,7 @@ struct ContentView: View {
                         works.removeAll { $0.id == id }
                         // Clear selection
                         selectedWorkId = works.first?.id
-                        // Clear grid
-                        GridManager.shared.clearCache()
+                        // Clear grid items but keep cache
                         GridManager.shared.items.removeAll()
                     } else {
                         LogManager.shared.log("ContentView: Failed to delete work with ID: \(id)", type: .error)
