@@ -26,6 +26,7 @@ class DatabaseManager: ObservableObject {
         let makeup: String?
         let talent: String?
         let workPeriod: String?
+        let visible: Bool
     }
     
     private init() {
@@ -197,7 +198,7 @@ class DatabaseManager: ObservableObject {
             return works
         }
         
-        let queryString = "SELECT id, path, stylist, hair, makeup, talent, work_period FROM works ORDER BY id DESC"
+        let queryString = "SELECT id, path, stylist, hair, makeup, talent, work_period, visible FROM works ORDER BY id DESC"
         var statement: OpaquePointer?
         
         guard sqlite3_prepare_v2(db, queryString, -1, &statement, nil) == SQLITE_OK else {
@@ -212,10 +213,13 @@ class DatabaseManager: ObservableObject {
         while sqlite3_step(statement) == SQLITE_ROW {
             let id = Int(sqlite3_column_int(statement, 0))
             
-            func getColumnText(_ index: Int32) -> String? {
-                guard let cString = sqlite3_column_text(statement, index) else { return nil }
+            let getColumnText = { (idx: Int32) -> String? in
+                guard let cString = sqlite3_column_text(statement, idx) else { return nil }
                 return String(cString: cString)
             }
+            
+            // Handle visible column: true if value is NULL or 1
+            let visibleValue = sqlite3_column_type(statement, 7) == SQLITE_NULL ? true : sqlite3_column_int(statement, 7) == 1
             
             let work = Work(
                 id: id,
@@ -224,7 +228,8 @@ class DatabaseManager: ObservableObject {
                 hair: getColumnText(3),
                 makeup: getColumnText(4),
                 talent: getColumnText(5),
-                workPeriod: getColumnText(6)
+                workPeriod: getColumnText(6),
+                visible: visibleValue
             )
             works.append(work)
         }
@@ -237,7 +242,7 @@ class DatabaseManager: ObservableObject {
         return db
     }
     
-    func updateWork(id: Int, workPeriod: String?, talent: String?, stylist: String?, hair: String?, makeup: String?) -> Bool {
+    func updateWork(id: Int, workPeriod: String?, talent: String?, stylist: String?, hair: String?, makeup: String?, visible: Bool) -> Bool {
         guard let db = db else {
             logManager.log("Database connection is not initialized", type: .error)
             return false
@@ -245,7 +250,7 @@ class DatabaseManager: ObservableObject {
         
         let queryString = """
             UPDATE works 
-            SET work_period = ?, talent = ?, stylist = ?, hair = ?, makeup = ?
+            SET work_period = ?, talent = ?, stylist = ?, hair = ?, makeup = ?, visible = ?
             WHERE id = ?
         """
         
@@ -262,7 +267,8 @@ class DatabaseManager: ObservableObject {
         sqlite3_bind_text(statement, 3, (stylist as NSString?)?.utf8String, -1, nil)
         sqlite3_bind_text(statement, 4, (hair as NSString?)?.utf8String, -1, nil)
         sqlite3_bind_text(statement, 5, (makeup as NSString?)?.utf8String, -1, nil)
-        sqlite3_bind_int(statement, 6, Int32(id))
+        sqlite3_bind_int(statement, 6, visible ? 1 : 0)
+        sqlite3_bind_int(statement, 7, Int32(id))
         
         let result = sqlite3_step(statement) == SQLITE_DONE
         sqlite3_finalize(statement)

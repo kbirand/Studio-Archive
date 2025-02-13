@@ -103,7 +103,8 @@ struct ContentView: View {
             talent: editedTalent,
             stylist: editedStylist,
             hair: editedHair,
-            makeup: editedMakeup
+            makeup: editedMakeup,
+            visible: works.first(where: { $0.id == id })?.visible ?? true
         ) {
             works = databaseManager.fetchWorks()
             isEdited = false
@@ -121,6 +122,24 @@ struct ContentView: View {
                 originalStylist = editedStylist
                 originalHair = editedHair
                 originalMakeup = editedMakeup
+            }
+        }
+    }
+    
+    private func toggleVisibility(for workId: Int) {
+        if let index = works.firstIndex(where: { $0.id == workId }) {
+            let work = works[index]
+            if databaseManager.updateWork(
+                id: workId,
+                workPeriod: work.workPeriod,
+                talent: work.talent,
+                stylist: work.stylist,
+                hair: work.hair,
+                makeup: work.makeup,
+                visible: !work.visible
+            ) {
+                // Refresh the works list after successful update
+                works = databaseManager.fetchWorks()
             }
         }
     }
@@ -170,9 +189,17 @@ struct ContentView: View {
                     HStack {
                         Spacer()
                         List(filteredWorks, id: \.id, selection: $selectedWorkId) { work in
-                            Text(work.workPeriod ?? "Unknown Work")
-                                .font(.system(size: 16, weight: .light))
-                                .tag(work.id)
+                            HStack {
+                                Text(work.workPeriod ?? "Unknown Work")
+                                    .font(.system(size: 16, weight: .light))
+                                    .tag(work.id)
+                                Spacer()
+                                Image(systemName: work.visible ? "checkmark.square" : "square")
+                                    .foregroundColor(.gray)
+                                    .onTapGesture {
+                                        toggleVisibility(for: work.id)
+                                    }
+                            }
                         }
                         .frame(width: 300)
                         .listStyle(.sidebar)
