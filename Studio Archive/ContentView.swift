@@ -214,12 +214,15 @@ struct ContentView: View {
             Spacer()
             TextField("Search works...", text: $searchText)
                 .textFieldStyle(.plain)
-                .frame(width: 300)
+                .frame(width: 262, height: 28)
+                .padding(.horizontal, 8)
                 .font(.system(size: 13))
+                .background(Color(NSColor.gray))
+                .cornerRadius(5)
+               
             Spacer()
         }
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+        .padding(.top, 20)
     }
     
     var body: some View {
@@ -246,13 +249,7 @@ struct ContentView: View {
             .padding([.top,.bottom],50)
             .navigationSplitViewColumnWidth(min: 300, ideal: 300)
             .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button(action: {
-                        showSettings = true
-                    }) {
-                        Image(systemName: "gear")
-                    }
-                }
+
                 
                 ToolbarItem(placement: .automatic) {
                     Button(action: {
@@ -279,21 +276,24 @@ struct ContentView: View {
         } detail: {
             if works.first(where: { $0.id == selectedWorkId }) != nil {
                 GeometryReader { geometry in
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 1) {
                         TextField("Work Period", text: $editedWorkPeriod)
                             .font(.system(size: 38, weight: .light))
                             .textFieldStyle(.plain)
                             .onChange(of: editedWorkPeriod) { _, _ in
                                 isEdited = hasChanges()
                             }
+                            .padding([.top],48)
                         
                         ImageCollectionViewWithDialog(gridManager: GridManager.shared) { selectedIndexes in
                             GridManager.shared.selectedItemIndexes = selectedIndexes
                         }
-                        .frame(height: geometry.size.height - 235) // Increased space for form
+                        .padding([.top],20)
+                        .padding([.bottom],-30)
+                        .frame(height: geometry.size.height - 265) // Increased space for form
                         
-                        HStack(alignment: .bottom, spacing: 20) {
-                            VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .bottom, spacing: 40) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Talent:")
                                         .foregroundColor(.gray)
@@ -367,10 +367,11 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity, maxHeight: 120)
+                        .padding(.bottom, 0)
                     }
                 }
-                .padding(40)
+                .padding([.trailing,.leading],50)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Text("Select a work")
@@ -494,4 +495,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .frame(width: 1200, height: 1000)
 }

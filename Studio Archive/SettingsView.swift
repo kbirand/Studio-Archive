@@ -116,6 +116,7 @@ struct SettingsView: View {
                                 defaults.set(Float(gridItemSize), forKey: "GridItemSize")
                                 gridManager.updateGridItemSize(CGFloat(gridItemSize))
                             }
+            
                             
                             HStack {
                                 Text("100px")

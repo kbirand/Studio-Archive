@@ -425,6 +425,8 @@ struct ImageCollectionViewWithDialog: View {
     }
 }
 
+
+
 class ImageCollectionViewItem: NSCollectionViewItem, NSMenuDelegate {
     fileprivate var containerView: NSView?
     fileprivate var imageLayer: CALayer?
